@@ -7,6 +7,12 @@ import Anthropic from '@anthropic-ai/sdk';
 const ENV_PATH = resolve(process.cwd(), '.env');
 
 export async function ensureApiKey(): Promise<string> {
+  // Demo mode — skip API key entirely
+  if (process.env.DEMO_MODE === 'true') {
+    console.log(chalk.yellow('\n  ⚡ Demo mode enabled — no API calls will be made\n'));
+    return 'demo';
+  }
+
   // Try loading from environment first
   const existing = process.env.ANTHROPIC_API_KEY;
   if (existing && existing.length > 0) {

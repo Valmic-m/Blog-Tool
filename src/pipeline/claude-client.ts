@@ -9,12 +9,18 @@ export interface ClaudeCallOptions {
 }
 
 export class ClaudeClient {
-  private client: Anthropic;
+  private client: Anthropic | null;
   private model: string;
+  private demoMode: boolean;
 
   constructor(apiKey: string, model?: string) {
-    this.client = new Anthropic({ apiKey });
+    this.demoMode = process.env.DEMO_MODE === 'true' || apiKey === 'demo';
+    this.client = this.demoMode ? null : new Anthropic({ apiKey });
     this.model = model || process.env.CLAUDE_MODEL || DEFAULT_MODEL;
+  }
+
+  isDemoMode(): boolean {
+    return this.demoMode;
   }
 
   async generateStructured<T>(
@@ -23,6 +29,16 @@ export class ClaudeClient {
     schema: ZodSchema<T>,
     options: ClaudeCallOptions = {},
   ): Promise<T> {
+    // Demo mode — return from mock data registry
+    if (this.demoMode) {
+      const { getMockForSchema } = await import('./mock-data.js');
+      const mock = getMockForSchema(schema);
+      if (mock) {
+        await new Promise((r) => setTimeout(r, 300 + Math.random() * 500)); // Simulate latency
+        return mock as T;
+      }
+    }
+
     const { maxTokens = 4000, temperature = 0.5 } = options;
     const model = options.model || this.model;
 
@@ -33,7 +49,7 @@ export class ClaudeClient {
     // Retry with exponential backoff for API errors
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const response = await this.client.messages.create({
+        const response = await this.client!.messages.create({
           model,
           max_tokens: maxTokens,
           temperature,
@@ -60,7 +76,7 @@ export class ClaudeClient {
 
         // Validation failed — retry once with error feedback
         const validationError = parsed.error.format();
-        const retryResponse = await this.client.messages.create({
+        const retryResponse = await this.client!.messages.create({
           model,
           max_tokens: maxTokens,
           temperature,
@@ -116,12 +132,19 @@ export class ClaudeClient {
     userPrompt: string,
     options: ClaudeCallOptions = {},
   ): Promise<string> {
+    // Demo mode — return mock blog markdown
+    if (this.demoMode) {
+      const { MOCK_BLOG_MARKDOWN } = await import('./mock-data.js');
+      await new Promise((r) => setTimeout(r, 800 + Math.random() * 1000)); // Simulate latency
+      return MOCK_BLOG_MARKDOWN;
+    }
+
     const { maxTokens = 8000, temperature = 0.7 } = options;
     const model = options.model || this.model;
 
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
-        const response = await this.client.messages.create({
+        const response = await this.client!.messages.create({
           model,
           max_tokens: maxTokens,
           temperature,

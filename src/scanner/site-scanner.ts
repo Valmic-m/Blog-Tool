@@ -67,6 +67,13 @@ export async function scanSite(
 ): Promise<SiteScanResult> {
   const log = onProgress || (() => {});
 
+  // Demo mode — skip real fetching, return mock scan
+  if (claudeClient.isDemoMode()) {
+    log('Demo mode — using mock site data');
+    const { MOCK_SITE_SCAN } = await import('../pipeline/mock-data.js');
+    return MOCK_SITE_SCAN;
+  }
+
   // ── Fetch pages ──────────────────────────────────────────────────────────
 
   log('Fetching homepage...');
