@@ -1,0 +1,49 @@
+import type { ContentPlan, ClientHistory } from '../../config/types.js';
+
+export function buildDeduplicationPrompt(
+  contentPlan: ContentPlan,
+  history: ClientHistory,
+) {
+  const pastTopics = history.generatedPosts.map((p) => ({
+    topic: p.topic,
+    title: p.title,
+    primaryKeyword: p.primaryKeyword,
+    cluster: p.clusterTopic,
+    month: p.month,
+  }));
+
+  const system = `You are a content deduplication specialist. Your job is to compare a proposed blog post against previously published posts and determine if it's too similar.
+
+Rules:
+- Same exact topic = NOT ALLOWED
+- Same topic, same angle = NOT ALLOWED
+- Same topic, different angle = ALLOWED (e.g., "What is Botox" vs "Botox for headaches")
+- Related topic, different focus = ALLOWED
+- Same keyword, different context = ALLOWED
+
+If the proposed topic is too similar to a previous post, suggest a revised topic that:
+- Stays within the same cluster
+- Offers a fresh angle
+- Doesn't repeat the previous angle
+- Maintains seasonal relevance
+
+Return JSON with:
+- title: string (revised title, or original if no change needed)
+- topic: string (revised topic, or original if no change needed)
+- sections: array (revised sections, or original if no change needed)
+- totalWordTarget: number (same as original)
+- modeAdjustments: string (note any dedup changes made)`;
+
+  const user = `Proposed blog post:
+Title: ${contentPlan.title}
+Topic: ${contentPlan.topic}
+
+Previously published posts:
+${pastTopics.map((p) => `- "${p.title}" (Topic: ${p.topic}, Keyword: ${p.primaryKeyword}, Cluster: ${p.cluster}, Month: ${p.month})`).join('\n')}
+
+Is this proposed post too similar to any previous post?
+If yes, revise the title, topic, and sections to offer a fresh angle.
+If no, return the original content plan unchanged.`;
+
+  return { system, user };
+}
