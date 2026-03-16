@@ -27,7 +27,7 @@ export function buildBlogGenerationPrompt(
 
 WRITING RULES:
 - Write in ${input.spellingStyle} English
-- Tone: ${input.tone}${modeConfig.toneModifier ? `. ${modeConfig.toneModifier}` : ''}
+- Tone: ${input.tone.join(' + ')}${input.tone.length > 1 ? ' (blend both tones naturally throughout — e.g. lead with ' + input.tone[0] + ' as the dominant voice but weave in ' + input.tone[1] + ' where appropriate)' : ''}${modeConfig.toneModifier ? `. ${modeConfig.toneModifier}` : ''}
 - Word count: ${minWords}-${maxWords} words
 - Use markdown formatting (# for title, ## for sections, ### for subsections)
 - Write for humans first, SEO second — content must read naturally

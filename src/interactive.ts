@@ -1,4 +1,4 @@
-import { input, select, confirm } from '@inquirer/prompts';
+import { input, select, checkbox, confirm } from '@inquirer/prompts';
 import type { ClientInput, Mode } from './config/types.js';
 import { TONE_OPTIONS, SPELLING_OPTIONS } from './config/defaults.js';
 import type { ClientHistory } from './config/types.js';
@@ -37,11 +37,12 @@ export async function collectInput(existing?: ClientHistory | null): Promise<Cli
     },
   });
 
-  const location = await input({
-    message: 'Location (city, state/province):',
-    default: existing?.location,
-    validate: (v) => (v.trim() ? true : 'Required'),
+  const locationsRaw = await input({
+    message: 'Broad location(s) — countries or regions (comma-separated):',
+    default: existing?.locations?.join(', '),
+    validate: (v) => (v.trim() ? true : 'Enter at least one location'),
   });
+  const locations = locationsRaw.split(',').map((s) => s.trim()).filter(Boolean);
 
   const industry = await input({
     message: 'Industry:',
@@ -62,10 +63,15 @@ export async function collectInput(existing?: ClientHistory | null): Promise<Cli
     validate: (v) => (v.trim() ? true : 'Required'),
   });
 
-  const tone = await select({
-    message: 'Tone of voice:',
-    choices: TONE_OPTIONS.map((t) => ({ name: t, value: t })),
-    default: existing?.tone || 'Professional',
+  const existingTones = existing?.tone || ['Professional'];
+  const tone = await checkbox({
+    message: 'Tone of voice (select up to 2):',
+    choices: TONE_OPTIONS.map((t) => ({ name: t, value: t, checked: existingTones.includes(t) })),
+    validate: (selected) => {
+      if (selected.length === 0) return 'Select at least one tone';
+      if (selected.length > 2) return 'Select at most 2 tones';
+      return true;
+    },
   });
 
   const spellingStyle = await select({
@@ -82,11 +88,12 @@ export async function collectInput(existing?: ClientHistory | null): Promise<Cli
     validate: (v) => (v.trim() ? true : 'Required'),
   });
 
-  const cityRegion = await input({
-    message: 'City/Region SEO focus:',
-    default: location,
-    validate: (v) => (v.trim() ? true : 'Required'),
+  const targetAreasRaw = await input({
+    message: 'Target cities/areas for local SEO focus (comma-separated):',
+    default: locations.join(', '),
+    validate: (v) => (v.trim() ? true : 'Enter at least one city or area'),
   });
+  const targetAreas = targetAreasRaw.split(',').map((s) => s.trim()).filter(Boolean);
 
   const competitorsRaw = await input({
     message: 'Competitor websites (comma-separated, optional):',
@@ -118,14 +125,14 @@ export async function collectInput(existing?: ClientHistory | null): Promise<Cli
     businessName,
     websiteUrl,
     blogUrl,
-    location,
+    locations,
     industry,
     services,
     targetAudience,
     tone,
     spellingStyle,
     month,
-    cityRegion,
+    targetAreas,
     competitors,
     specialInstructions,
     mode,

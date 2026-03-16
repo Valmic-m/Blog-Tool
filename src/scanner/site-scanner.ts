@@ -140,9 +140,9 @@ export async function scanSite(
       existingTopics: [],
       keywordsTargeted: [],
       services: input.services,
-      entityPhrases: [input.businessName, `${input.businessName} ${input.location}`],
-      locationPhrases: [input.location, input.cityRegion],
-      detectedTone: input.tone,
+      entityPhrases: [input.businessName, ...input.locations.map((l) => `${input.businessName} ${l}`)],
+      locationPhrases: [...input.locations, ...input.targetAreas],
+      detectedTone: input.tone.join(' + '),
       pageContents: {},
     };
   }
@@ -152,7 +152,7 @@ export async function scanSite(
   log('Analyzing website content with Claude...');
 
   const systemPrompt = `You are an SEO analyst. Analyze the following website content and extract structured data.
-The business is: ${input.businessName} in ${input.location}, industry: ${input.industry}.
+The business is: ${input.businessName} in ${input.locations.join(', ')}, industry: ${input.industry}.
 
 Return a JSON object with these fields:
 - existingTopics: array of blog topics already published (from blog page)
@@ -184,9 +184,9 @@ Return a JSON object with these fields:
       existingTopics,
       keywordsTargeted: [],
       services: [...new Set([...input.services, ...services.map((s) => s.name)])],
-      entityPhrases: [input.businessName, `${input.businessName} ${input.location}`],
-      locationPhrases: [input.location, input.cityRegion],
-      detectedTone: input.tone,
+      entityPhrases: [input.businessName, ...input.locations.map((l) => `${input.businessName} ${l}`)],
+      locationPhrases: [...input.locations, ...input.targetAreas],
+      detectedTone: input.tone.join(' + '),
       pageContents: {},
     };
   }

@@ -22,7 +22,7 @@ Return JSON with:
 - questions: array of { question, answer, targetedFor ("google"|"ai"|"voice") }`;
 
   const user = `Business: ${input.businessName}
-Location: ${input.location}
+Location: ${input.locations.join(', ')}
 Industry: ${input.industry}
 
 Blog topic: ${contentPlan.topic}

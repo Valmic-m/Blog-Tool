@@ -48,11 +48,11 @@ Return JSON with:
 - modeAdjustments: string (any mode-specific notes)`;
 
   const user = `Business: ${input.businessName}
-Location: ${input.location}
+Location: ${input.locations.join(', ')}
 Industry: ${input.industry}
 Services: ${input.services.join(', ')}
 Target Audience: ${input.targetAudience}
-Tone: ${input.tone}
+Tone: ${input.tone.join(' + ')}
 Month: ${input.month}
 Mode: ${modeConfig.label}
 

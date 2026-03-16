@@ -75,6 +75,19 @@
     .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
 
+    .checkbox-group {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 6px;
+      padding: 10px 12px; background: var(--bg);
+      border: 1px solid var(--border); border-radius: var(--radius);
+    }
+    .checkbox-label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 13px; color: var(--text); cursor: pointer;
+    }
+    .checkbox-label input[type="checkbox"] {
+      width: auto; margin: 0; accent-color: var(--primary); cursor: pointer;
+    }
+
     .btn {
       display: inline-flex; align-items: center; gap: 8px;
       padding: 10px 20px; border-radius: var(--radius); font-size: 14px;
@@ -170,7 +183,18 @@
     function render() {
       const main = document.getElementById('main');
       switch (currentPage) {
-        case 'generate': main.innerHTML = renderGenerate(); break;
+        case 'generate':
+          main.innerHTML = renderGenerate();
+          const toneGroup = document.getElementById('toneGroup');
+          if (toneGroup) {
+            toneGroup.addEventListener('change', (e) => {
+              const checked = toneGroup.querySelectorAll('input[name="tone"]:checked');
+              if (checked.length > 2) {
+                e.target.checked = false;
+              }
+            });
+          }
+          break;
         case 'clients': renderClients(main); break;
         case 'history': renderHistory(main); break;
       }
@@ -202,8 +226,8 @@
                 <input name="blogUrl" required placeholder="https://example.com/blog" type="url" />
               </div>
               <div class="form-group">
-                <label>Location *</label>
-                <input name="location" required placeholder="Austin, TX" />
+                <label>Broad Location(s) * (comma-separated)</label>
+                <input name="locations" required placeholder="Canada, US" />
               </div>
             </div>
             <div class="form-row">
@@ -222,21 +246,21 @@
                 <input name="targetAudience" required value="General consumers" />
               </div>
               <div class="form-group">
-                <label>City/Region SEO Focus *</label>
-                <input name="cityRegion" required placeholder="Austin, TX" />
+                <label>Target Cities/Areas * (comma-separated)</label>
+                <input name="targetAreas" required placeholder="Toronto, Winnipeg, Sarnia, Stratford" />
               </div>
             </div>
             <div class="form-row-3">
               <div class="form-group">
-                <label>Tone</label>
-                <select name="tone">
-                  <option>Professional</option>
-                  <option>Friendly</option>
-                  <option>Clinical</option>
-                  <option>Casual</option>
-                  <option>Authoritative</option>
-                  <option>Warm & Approachable</option>
-                </select>
+                <label>Tone (select up to 2)</label>
+                <div class="checkbox-group" id="toneGroup">
+                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Professional" checked /> Professional</label>
+                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Friendly" /> Friendly</label>
+                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Clinical" /> Clinical</label>
+                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Casual" /> Casual</label>
+                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Authoritative" /> Authoritative</label>
+                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Warm & Approachable" /> Warm & Approachable</label>
+                </div>
               </div>
               <div class="form-group">
                 <label>Spelling Style</label>
@@ -299,6 +323,13 @@
       e.preventDefault();
       const form = e.target;
       const btn = document.getElementById('generateBtn');
+
+      const selectedTones = Array.from(form.querySelectorAll('input[name="tone"]:checked')).map(el => el.value);
+      if (selectedTones.length === 0 || selectedTones.length > 2) {
+        alert('Please select 1 or 2 tones.');
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = 'Generating...';
 
@@ -306,14 +337,14 @@
         businessName: form.businessName.value,
         websiteUrl: form.websiteUrl.value,
         blogUrl: form.blogUrl.value,
-        location: form.location.value,
+        locations: form.locations.value.split(',').map(s => s.trim()).filter(Boolean),
         industry: form.industry.value,
         services: form.services.value.split(',').map(s => s.trim()).filter(Boolean),
         targetAudience: form.targetAudience.value,
-        tone: form.tone.value,
+        tone: selectedTones,
         spellingStyle: form.spellingStyle.value,
         month: form.month.value,
-        cityRegion: form.cityRegion.value,
+        targetAreas: form.targetAreas.value.split(',').map(s => s.trim()).filter(Boolean),
         competitors: form.competitors.value ? form.competitors.value.split(',').map(s => s.trim()) : [],
         specialInstructions: form.specialInstructions.value,
         mode: form.mode.value,

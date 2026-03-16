@@ -29,7 +29,7 @@ ${modeConfig.promptModifiers.length > 0 ? 'Mode-specific instructions:\n' + mode
 Return JSON with: primaryKeyword, secondaryKeywords[], longTailPhrases[], localPhrases[], questionPhrases[]`;
 
   const user = `Business: ${input.businessName}
-Location: ${input.location} (SEO focus: ${input.cityRegion})
+Location: ${input.locations.join(', ')} (SEO focus: ${input.targetAreas.join(', ')})
 Industry: ${input.industry}
 Services: ${input.services.join(', ')}
 
