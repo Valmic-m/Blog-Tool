@@ -239,6 +239,8 @@
   <script>
     let currentPage = 'generate';
     let generationResult = null;
+    let loadedTemplate = null;
+    let clientsList = null;
 
     function showPage(page) {
       currentPage = page;
@@ -247,7 +249,11 @@
       render();
     }
 
-    function render() {
+    function esc(str) {
+      return String(str).replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    async function render() {
       const main = document.getElementById('main');
       switch (currentPage) {
         case 'generate':
@@ -261,9 +267,45 @@
               }
             });
           }
+          // Populate client dropdown
+          try {
+            const res = await fetch('/api/templates/');
+            const data = await res.json();
+            clientsList = data.clients || [];
+            const sel = document.getElementById('template-client-select');
+            if (sel) {
+              sel.innerHTML = '<option value="">Select a client...</option>' +
+                clientsList.map(c =>
+                  `<option value="${c.slug}" ${c.hasTemplate ? '' : 'disabled'}>${c.businessName}${c.hasTemplate ? '' : ' (no template)'}</option>`
+                ).join('');
+            }
+          } catch {}
           break;
         case 'clients': renderClients(main); break;
       }
+    }
+
+    async function loadClientTemplate() {
+      const sel = document.getElementById('template-client-select');
+      const resultEl = document.getElementById('template-load-result');
+      const slug = sel.value;
+      if (!slug) { resultEl.innerHTML = '<span style="color:var(--danger)">Select a client first</span>'; return; }
+
+      resultEl.innerHTML = '<span style="color:var(--text-dim)">Loading template...</span>';
+      try {
+        const res = await fetch(`/api/templates/${slug}`);
+        if (!res.ok) throw new Error('No template found');
+        const { template } = await res.json();
+        loadedTemplate = template;
+        render();
+      } catch (err) {
+        resultEl.innerHTML = `<span style="color:var(--danger)">${err.message}</span>`;
+      }
+    }
+
+    function clearTemplate() {
+      loadedTemplate = null;
+      render();
     }
 
     // ── Generate Page ───────────────────────────────────────────────────
@@ -271,70 +313,85 @@
     function renderGenerate() {
       const now = new Date();
       const currentMonth = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+      const t = loadedTemplate;
 
       return `
+        <div class="card" style="margin-bottom:16px">
+          <div style="display:flex;justify-content:space-between;align-items:center">
+            <h2>Load Client Template</h2>
+            ${t ? `<button class="btn btn-outline btn-sm" onclick="clearTemplate()">Clear</button>` : ''}
+          </div>
+          <p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">
+            ${t ? `Loaded template for <strong>${t.businessName}</strong>. Edit any fields below before generating.` : 'Select a client to auto-fill the form from their saved template.'}
+          </p>
+          <div style="display:flex;gap:8px;align-items:flex-end">
+            <div class="form-group" style="flex:1;margin-bottom:0">
+              <select id="template-client-select">
+                <option value="">Select a client...</option>
+              </select>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="loadClientTemplate()" style="white-space:nowrap">Load Template</button>
+          </div>
+          <div id="template-load-result" style="margin-top:8px;font-size:13px"></div>
+        </div>
         <div class="card">
           <h2>Generate Blog Post</h2>
           <form onsubmit="startGeneration(event)">
             <div class="form-row">
               <div class="form-group">
                 <label>Business Name *</label>
-                <input name="businessName" required placeholder="Acme Dental Care" />
+                <input name="businessName" required placeholder="Acme Dental Care" ${t ? `value="${esc(t.businessName)}"` : ''} />
               </div>
               <div class="form-group">
                 <label>Website URL *</label>
-                <input name="websiteUrl" required placeholder="https://example.com" type="url" />
+                <input name="websiteUrl" required placeholder="https://example.com" type="url" ${t ? `value="${esc(t.websiteUrl)}"` : ''} />
               </div>
             </div>
             <div class="form-row">
               <div class="form-group">
                 <label>Blog URL *</label>
-                <input name="blogUrl" required placeholder="https://example.com/blog" type="url" />
+                <input name="blogUrl" required placeholder="https://example.com/blog" type="url" ${t ? `value="${esc(t.blogUrl)}"` : ''} />
               </div>
               <div class="form-group">
                 <label>Broad Location(s) * (comma-separated)</label>
-                <input name="locations" required placeholder="Canada, US" />
+                <input name="locations" required placeholder="Canada, US" ${t ? `value="${esc(t.locations.join(', '))}"` : ''} />
               </div>
             </div>
             <div class="form-row">
               <div class="form-group">
                 <label>Industry *</label>
-                <input name="industry" required placeholder="Dental / Cosmetic Dentistry" />
+                <input name="industry" required placeholder="Dental / Cosmetic Dentistry" ${t ? `value="${esc(t.industry)}"` : ''} />
               </div>
               <div class="form-group">
                 <label>Services * (comma-separated)</label>
-                <input name="services" required placeholder="teeth whitening, veneers, implants" />
+                <input name="services" required placeholder="teeth whitening, veneers, implants" ${t ? `value="${esc(t.services.join(', '))}"` : ''} />
               </div>
             </div>
             <div class="form-row">
               <div class="form-group">
                 <label>Target Audience *</label>
-                <input name="targetAudience" required value="General consumers" />
+                <input name="targetAudience" required value="${t ? esc(t.targetAudience) : 'General consumers'}" />
               </div>
               <div class="form-group">
                 <label>Target Cities/Areas * (comma-separated)</label>
-                <input name="targetAreas" required placeholder="Toronto, Winnipeg, Sarnia, Stratford" />
+                <input name="targetAreas" required placeholder="Toronto, Winnipeg, Sarnia, Stratford" ${t ? `value="${esc(t.targetAreas.join(', '))}"` : ''} />
               </div>
             </div>
             <div class="form-row-3">
               <div class="form-group">
                 <label>Tone (select up to 2)</label>
                 <div class="checkbox-group" id="toneGroup">
-                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Professional" checked /> Professional</label>
-                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Friendly" /> Friendly</label>
-                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Clinical" /> Clinical</label>
-                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Casual" /> Casual</label>
-                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Authoritative" /> Authoritative</label>
-                  <label class="checkbox-label"><input type="checkbox" name="tone" value="Warm & Approachable" /> Warm & Approachable</label>
+                  ${['Professional','Friendly','Clinical','Casual','Authoritative','Warm & Approachable'].map(tone =>
+                    `<label class="checkbox-label"><input type="checkbox" name="tone" value="${tone}" ${(t ? t.tone : ['Professional']).includes(tone) ? 'checked' : ''} /> ${tone}</label>`
+                  ).join('')}
                 </div>
               </div>
               <div class="form-group">
                 <label>Spelling Style</label>
                 <select name="spellingStyle">
-                  <option>American</option>
-                  <option>British</option>
-                  <option>Canadian</option>
-                  <option>Australian</option>
+                  ${['American','British','Canadian','Australian'].map(s =>
+                    `<option ${(t ? t.spellingStyle : 'American') === s ? 'selected' : ''}>${s}</option>`
+                  ).join('')}
                 </select>
               </div>
               <div class="form-group">
@@ -346,24 +403,33 @@
               <div class="form-group">
                 <label>Mode</label>
                 <select name="mode">
-                  <option value="standard">Standard (1000-1400 words)</option>
-                  <option value="authority">Authority (1500-2000 words)</option>
-                  <option value="longform">Longform (2000-3000 words)</option>
-                  <option value="conversion">Conversion (1000-1400 words)</option>
-                  <option value="local-domination">Local Domination (1200-1600 words)</option>
-                  <option value="cluster-builder">Cluster Builder (1000-1400 words)</option>
+                  ${[
+                    ['standard', 'Standard (1000-1400 words)'],
+                    ['authority', 'Authority (1500-2000 words)'],
+                    ['longform', 'Longform (2000-3000 words)'],
+                    ['conversion', 'Conversion (1000-1400 words)'],
+                    ['local-domination', 'Local Domination (1200-1600 words)'],
+                    ['cluster-builder', 'Cluster Builder (1000-1400 words)'],
+                  ].map(([val, label]) =>
+                    `<option value="${val}" ${(t?.defaultMode || 'standard') === val ? 'selected' : ''}>${label}</option>`
+                  ).join('')}
                 </select>
               </div>
               <div class="form-group">
                 <label>Competitor Websites (optional)</label>
-                <input name="competitors" placeholder="https://competitor1.com, https://competitor2.com" />
+                <input name="competitors" placeholder="https://competitor1.com, https://competitor2.com" ${t?.competitors?.length ? `value="${esc(t.competitors.join(', '))}"` : ''} />
               </div>
             </div>
             <div class="form-group">
               <label>Special Instructions (optional)</label>
-              <textarea name="specialInstructions" placeholder="Any specific focus areas, topics to avoid, etc."></textarea>
+              <textarea name="specialInstructions" placeholder="Any specific focus areas, topics to avoid, etc.">${t?.specialInstructions || ''}</textarea>
             </div>
-            <button type="submit" class="btn btn-primary" id="generateBtn">Generate Blog Post</button>
+            <div style="display:flex;align-items:center;gap:16px">
+              <button type="submit" class="btn btn-primary" id="generateBtn">Generate Blog Post</button>
+              <label class="checkbox-label" style="font-size:13px">
+                <input type="checkbox" id="saveTemplateCheck" checked /> Save as client template
+              </label>
+            </div>
           </form>
         </div>
         <div id="progress-container" style="display:none">
@@ -499,6 +565,33 @@
         alert('Generation failed: ' + err.message);
       }
 
+      // Save template if checkbox is checked
+      const saveCheck = document.getElementById('saveTemplateCheck');
+      if (saveCheck && saveCheck.checked && data.businessName) {
+        const slug = data.businessName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
+        try {
+          await fetch(`/api/templates/${slug}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              businessName: data.businessName,
+              websiteUrl: data.websiteUrl,
+              blogUrl: data.blogUrl,
+              locations: data.locations,
+              industry: data.industry,
+              services: data.services,
+              targetAudience: data.targetAudience,
+              tone: data.tone,
+              spellingStyle: data.spellingStyle,
+              targetAreas: data.targetAreas,
+              competitors: data.competitors,
+              defaultMode: data.mode,
+              specialInstructions: data.specialInstructions || undefined,
+            }),
+          });
+        } catch {}
+      }
+
       btn.disabled = false;
       btn.textContent = 'Generate Blog Post';
     }
@@ -588,19 +681,52 @@
       if (!detailEl) return;
 
       try {
-        const [clientRes, platformRes, connectorRes] = await Promise.all([
+        const [clientRes, platformRes, connectorRes, templateRes] = await Promise.all([
           fetch(`/api/clients/${slug}`),
           fetch(`/api/platforms/${slug}`),
           fetch(`/api/connectors/${slug}`),
+          fetch(`/api/templates/${slug}`).then(r => r.ok ? r.json() : null).catch(() => null),
         ]);
         const { client } = await clientRes.json();
         const platformData = await platformRes.json();
         const connectorData = await connectorRes.json();
+        const tmpl = templateRes?.template || null;
 
         const platforms = platformData.platforms || [];
         const items = platformData.items || [];
 
         detailEl.innerHTML = `
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+              <h2>${client.businessName} — Template</h2>
+              <div style="display:flex;gap:8px">
+                ${tmpl ? `
+                  <button class="btn btn-primary btn-sm" onclick="useTemplateForGenerate('${slug}')">Use for Generate</button>
+                  <button class="btn btn-danger btn-sm" onclick="deleteClientTemplate('${slug}')">Delete Template</button>
+                ` : `
+                  <button class="btn btn-primary btn-sm" onclick="createTemplateFromClient('${slug}')">Create Template</button>
+                `}
+              </div>
+            </div>
+            ${tmpl ? `
+              <div class="meta-grid">
+                <div class="meta-item"><label>Business</label><p>${tmpl.businessName}</p></div>
+                <div class="meta-item"><label>Website</label><p>${tmpl.websiteUrl}</p></div>
+                <div class="meta-item"><label>Blog URL</label><p>${tmpl.blogUrl}</p></div>
+                <div class="meta-item"><label>Industry</label><p>${tmpl.industry}</p></div>
+                <div class="meta-item"><label>Locations</label><p>${tmpl.locations.join(', ')}</p></div>
+                <div class="meta-item"><label>Services</label><p>${tmpl.services.join(', ')}</p></div>
+                <div class="meta-item"><label>Audience</label><p>${tmpl.targetAudience}</p></div>
+                <div class="meta-item"><label>Tone</label><p>${tmpl.tone.join(', ')}</p></div>
+                <div class="meta-item"><label>Spelling</label><p>${tmpl.spellingStyle}</p></div>
+                <div class="meta-item"><label>Target Areas</label><p>${tmpl.targetAreas.join(', ')}</p></div>
+                ${tmpl.competitors?.length ? `<div class="meta-item"><label>Competitors</label><p>${tmpl.competitors.join(', ')}</p></div>` : ''}
+                ${tmpl.defaultMode ? `<div class="meta-item"><label>Default Mode</label><p>${tmpl.defaultMode}</p></div>` : ''}
+                ${tmpl.specialInstructions ? `<div class="meta-item" style="grid-column:span 2"><label>Special Instructions</label><p>${tmpl.specialInstructions}</p></div>` : ''}
+              </div>
+            ` : '<p style="color:var(--text-dim);font-size:13px">No template saved yet. Generate a post or click "Create Template" to save defaults for this client.</p>'}
+          </div>
+
           <div class="card">
             <h2>${client.businessName} — Content Sources</h2>
             <p style="color:var(--text-dim);font-size:13px;margin-bottom:16px">
@@ -831,6 +957,53 @@
       if (selectedClientSlug === slug) selectedClientSlug = null;
       await fetch(`/api/clients/${slug}`, { method: 'DELETE' });
       renderClients(document.getElementById('main'));
+    }
+
+    // ── Template Management ──────────────────────────────────────────────
+
+    async function useTemplateForGenerate(slug) {
+      try {
+        const res = await fetch(`/api/templates/${slug}`);
+        if (!res.ok) throw new Error('No template');
+        const { template } = await res.json();
+        loadedTemplate = template;
+        showPage('generate');
+      } catch (err) {
+        alert('Failed to load template: ' + err.message);
+      }
+    }
+
+    async function deleteClientTemplate(slug) {
+      if (!confirm('Delete the saved template for this client?')) return;
+      await fetch(`/api/templates/${slug}`, { method: 'DELETE' });
+      renderClientDetail(slug);
+    }
+
+    async function createTemplateFromClient(slug) {
+      try {
+        const res = await fetch(`/api/clients/${slug}`);
+        const { client } = await res.json();
+        await fetch(`/api/templates/${slug}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            businessName: client.businessName,
+            websiteUrl: client.websiteUrl,
+            blogUrl: client.blogUrl,
+            locations: client.locations,
+            industry: client.industry,
+            services: client.services,
+            targetAudience: client.targetAudience,
+            tone: client.tone,
+            spellingStyle: client.spellingStyle,
+            targetAreas: client.targetAreas,
+            competitors: [],
+          }),
+        });
+        renderClientDetail(slug);
+      } catch (err) {
+        alert('Failed to create template: ' + err.message);
+      }
     }
 
     // ── Connector Management ─────────────────────────────────────────────

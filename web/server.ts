@@ -7,6 +7,7 @@ import { createClientRoutes } from './routes/clients.js';
 import { createGenerateRoutes } from './routes/generate.js';
 import { createPlatformRoutes } from './routes/platforms.js';
 import { createConnectorRoutes } from './routes/connectors.js';
+import { createTemplateRoutes } from './routes/templates.js';
 
 export async function startDashboard(apiKey: string, port: number = 3847): Promise<void> {
   const app = express();
@@ -19,6 +20,7 @@ export async function startDashboard(apiKey: string, port: number = 3847): Promi
   app.use('/api/generate', createGenerateRoutes(apiKey));
   app.use('/api/platforms', createPlatformRoutes());
   app.use('/api/connectors', createConnectorRoutes());
+  app.use('/api/templates', createTemplateRoutes());
 
   // Serve frontend
   const __dirname = dirname(fileURLToPath(import.meta.url));

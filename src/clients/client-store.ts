@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync, readdirSync, rmSync } from 'fs';
 import { join } from 'path';
 import slugify from 'slugify';
-import { ClientHistorySchema, type ClientHistory, type ClientInput, type GeneratedPostRecord } from '../config/types.js';
+import { ClientHistorySchema, ClientTemplateSchema, type ClientHistory, type ClientInput, type ClientTemplate, type GeneratedPostRecord } from '../config/types.js';
 
 const DATA_DIR = join(process.cwd(), 'data', 'clients');
 
@@ -117,6 +117,53 @@ export function listClients(): { slug: string; businessName: string; postCount: 
       };
     })
     .filter((c): c is NonNullable<typeof c> => c !== null);
+}
+
+// ── Client Template CRUD ──────────────────────────────────────────────────
+
+export function getTemplate(slug: string): ClientTemplate | null {
+  const templatePath = join(getClientDir(slug), 'template.json');
+  if (!existsSync(templatePath)) return null;
+
+  try {
+    const raw = JSON.parse(readFileSync(templatePath, 'utf-8'));
+    const parsed = ClientTemplateSchema.safeParse(raw);
+    return parsed.success ? parsed.data : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveTemplate(slug: string, template: ClientTemplate): void {
+  const dir = getClientDir(slug);
+  ensureDir(dir);
+  writeFileSync(join(dir, 'template.json'), JSON.stringify(template, null, 2));
+}
+
+export function deleteTemplate(slug: string): boolean {
+  const templatePath = join(getClientDir(slug), 'template.json');
+  if (!existsSync(templatePath)) return false;
+  rmSync(templatePath);
+  return true;
+}
+
+export function templateFromInput(input: ClientInput): ClientTemplate {
+  return {
+    businessName: input.businessName,
+    websiteUrl: input.websiteUrl,
+    blogUrl: input.blogUrl,
+    locations: input.locations,
+    industry: input.industry,
+    services: input.services,
+    targetAudience: input.targetAudience,
+    tone: input.tone,
+    spellingStyle: input.spellingStyle,
+    targetAreas: input.targetAreas,
+    competitors: input.competitors,
+    defaultMode: input.mode,
+    specialInstructions: input.specialInstructions || undefined,
+    lastUpdated: new Date().toISOString(),
+  };
 }
 
 export function deleteClient(slug: string): boolean {
