@@ -1,9 +1,10 @@
-import type { ClientInput, SiteScanResult, ClientHistory } from '../../config/types.js';
+import type { ClientInput, SiteScanResult, ClientHistory, ExternalContentCorpus } from '../../config/types.js';
 
 export function buildAuthorityMapPrompt(
   input: ClientInput,
   scanResult: SiteScanResult,
   history: ClientHistory | null,
+  externalContent?: ExternalContentCorpus | null,
 ) {
   const system = `You are a senior SEO strategist specializing in topical authority mapping.
 Your job is to analyze a business's existing content and build a comprehensive topic cluster map.
@@ -22,6 +23,22 @@ Return a JSON object with:
     ? scanResult.existingTopics.map((t) => `- ${t}`).join('\n')
     : 'No existing blog posts found';
 
+  // Build external content section
+  let externalContentSection = '';
+  if (externalContent && externalContent.items.length > 0) {
+    const externalList = externalContent.items
+      .map((item) => {
+        const parts = [`- "${item.title}"`];
+        if (item.publishedDate) parts[0] += ` (${item.publishedDate})`;
+        if (item.topics && item.topics.length > 0) parts.push(`  Topics: ${item.topics.join(', ')}`);
+        if (item.keywords && item.keywords.length > 0) parts.push(`  Keywords: ${item.keywords.join(', ')}`);
+        return parts.join('\n');
+      })
+      .join('\n');
+    externalContentSection = `\nContent from connected platforms (Medium, Substack, blog, etc.):
+${externalList}\n`;
+  }
+
   const user = `Business: ${input.businessName}
 Industry: ${input.industry}
 Location: ${input.locations.join(', ')}
@@ -33,6 +50,7 @@ ${existingTopics}
 
 Previously generated posts:
 ${pastTopics}
+${externalContentSection}
 
 Services detected: ${scanResult.services.join(', ')}
 Keywords detected: ${scanResult.keywordsTargeted.join(', ')}

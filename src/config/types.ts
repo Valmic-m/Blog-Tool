@@ -196,6 +196,35 @@ export const BlogOutputSchema = z.object({
 });
 export type BlogOutput = z.infer<typeof BlogOutputSchema>;
 
+// ── External Content (from connected platforms) ───────────────────────────────
+
+export const ExternalContentItemSchema = z.object({
+  title: z.string(),
+  url: z.string(),
+  publishedDate: z.string().optional(),
+  excerpt: z.string().optional(),
+  topics: z.array(z.string()).optional(),
+  keywords: z.array(z.string()).optional(),
+  source: z.enum(['rss', 'sitemap', 'crawl', 'manual']),
+});
+export type ExternalContentItem = z.infer<typeof ExternalContentItemSchema>;
+
+export const ContentPlatformSchema = z.object({
+  type: z.enum(['rss', 'sitemap', 'crawl', 'wordpress-api']),
+  url: z.string(),
+  label: z.string().optional(),
+  lastFetched: z.string().optional(),
+  itemCount: z.number().optional(),
+});
+export type ContentPlatform = z.infer<typeof ContentPlatformSchema>;
+
+export const ExternalContentCorpusSchema = z.object({
+  platforms: z.array(ContentPlatformSchema),
+  items: z.array(ExternalContentItemSchema),
+  lastUpdated: z.string(),
+});
+export type ExternalContentCorpus = z.infer<typeof ExternalContentCorpusSchema>;
+
 // ── Client History ─────────────────────────────────────────────────────────────
 
 export const GeneratedPostRecordSchema = z.object({
@@ -241,6 +270,7 @@ export const ClientHistorySchema = z.object({
   generatedPosts: z.array(GeneratedPostRecordSchema),
   authorityMap: AuthorityMapSchema.nullable(),
   clusterProgress: ClusterProgressSchema.nullable(),
+  externalContent: ExternalContentCorpusSchema.nullable().optional(),
   lastUpdated: z.string(),
 });
 export type ClientHistory = z.infer<typeof ClientHistorySchema>;
@@ -250,6 +280,7 @@ export type ClientHistory = z.infer<typeof ClientHistorySchema>;
 export interface PipelineContext {
   input: ClientInput;
   clientHistory: ClientHistory | null;
+  externalContent: ExternalContentCorpus | null;
   siteScan: SiteScanResult | null;
   authorityMap: AuthorityMap | null;
   seasonalAnalysis: SeasonalAnalysis | null;

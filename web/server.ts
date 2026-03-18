@@ -6,6 +6,7 @@ import chalk from 'chalk';
 import { createClientRoutes } from './routes/clients.js';
 import { createGenerateRoutes } from './routes/generate.js';
 import { createHistoryRoutes } from './routes/history.js';
+import { createPlatformRoutes } from './routes/platforms.js';
 
 export async function startDashboard(apiKey: string, port: number = 3847): Promise<void> {
   const app = express();
@@ -17,6 +18,7 @@ export async function startDashboard(apiKey: string, port: number = 3847): Promi
   app.use('/api/clients', createClientRoutes());
   app.use('/api/generate', createGenerateRoutes(apiKey));
   app.use('/api/history', createHistoryRoutes());
+  app.use('/api/platforms', createPlatformRoutes());
 
   // Serve frontend
   const __dirname = dirname(fileURLToPath(import.meta.url));

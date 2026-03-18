@@ -1,9 +1,10 @@
-import type { ClientInput, AuthorityMap, ClientHistory } from '../../config/types.js';
+import type { ClientInput, AuthorityMap, ClientHistory, ExternalContentCorpus } from '../../config/types.js';
 
 export function buildMonthStrategyPrompt(
   input: ClientInput,
   authorityMap: AuthorityMap,
   history: ClientHistory | null,
+  externalContent?: ExternalContentCorpus | null,
 ) {
   const system = `You are a senior content strategist planning a 12-month editorial calendar.
 
@@ -43,7 +44,12 @@ ${pastTopics}
 
 Plan the next 6-12 months of blog content.
 Each month should build on previous posts and strengthen the overall authority.
-Consider seasonal patterns for ${input.locations.join(', ')}.`;
+Consider seasonal patterns for ${input.locations.join(', ')}.${
+    externalContent && externalContent.items.length > 0
+      ? `\n\nExisting content from connected platforms (do not repeat these topics):
+${externalContent.items.map((item) => `- "${item.title}"${item.topics ? ` (${item.topics.join(', ')})` : ''}`).join('\n')}`
+      : ''
+  }`;
 
   return { system, user };
 }

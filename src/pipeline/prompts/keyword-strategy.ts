@@ -1,10 +1,11 @@
-import type { ClientInput, AuthorityMap, SeasonalAnalysis } from '../../config/types.js';
+import type { ClientInput, AuthorityMap, SeasonalAnalysis, ExternalContentCorpus } from '../../config/types.js';
 import { getModeConfig } from '../../config/modes.js';
 
 export function buildKeywordStrategyPrompt(
   input: ClientInput,
   authorityMap: AuthorityMap,
   seasonal: SeasonalAnalysis,
+  externalContent?: ExternalContentCorpus | null,
 ) {
   const modeConfig = getModeConfig(input.mode);
 
@@ -42,7 +43,12 @@ Seasonal context:
 - Trends: ${seasonal.industryTrends.join(', ')}
 - Suggested angles: ${seasonal.suggestedAngles.join(', ')}
 
-Generate a keyword strategy that combines the recommended topic cluster with seasonal relevance.`;
+Generate a keyword strategy that combines the recommended topic cluster with seasonal relevance.${
+    externalContent && externalContent.items.length > 0
+      ? `\n\nKeywords already targeted by existing content (avoid direct overlap, find complementary angles):
+${[...new Set(externalContent.items.flatMap((i) => i.keywords || []))].slice(0, 30).join(', ')}`
+      : ''
+  }`;
 
   return { system, user };
 }
