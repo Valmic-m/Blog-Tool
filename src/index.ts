@@ -179,7 +179,7 @@ clientsCmd
     }
     console.log(chalk.bold(`\n  ${client.businessName}`));
     console.log(`  ${chalk.dim(client.websiteUrl)}`);
-    console.log(`  ${client.location} | ${client.industry}`);
+    console.log(`  ${client.locations.join(', ')} | ${client.industry}`);
     console.log(`  Services: ${client.services.join(', ')}`);
     console.log(`  Posts: ${client.generatedPosts.length}`);
     console.log('');

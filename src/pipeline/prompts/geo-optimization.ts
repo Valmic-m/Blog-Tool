@@ -24,8 +24,8 @@ Return JSON with:
 - voiceSearchPhrases: string[] (phrases optimized for voice search queries)`;
 
   const user = `Business: ${input.businessName}
-Location: ${input.location}
-City/Region focus: ${input.cityRegion}
+Location: ${input.locations.join(', ')}
+Target areas: ${input.targetAreas.join(', ')}
 Industry: ${input.industry}
 Services: ${input.services.join(', ')}
 Primary keyword: ${keywords.primaryKeyword}

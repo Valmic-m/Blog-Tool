@@ -28,7 +28,7 @@ Return JSON with:
 Industry: ${input.industry}
 Services: ${input.services.join(', ')}
 Target Audience: ${input.targetAudience}
-Tone: ${input.tone}
+Tone: ${input.tone.join(' + ')}
 
 Generate 4-6 items for each E-E-A-T category.
 Make them specific to the ${input.industry} industry.

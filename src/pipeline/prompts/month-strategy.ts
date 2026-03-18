@@ -31,7 +31,7 @@ Return JSON with:
 
   const user = `Business: ${input.businessName}
 Industry: ${input.industry}
-Location: ${input.location}
+Location: ${input.locations.join(', ')}
 Services: ${input.services.join(', ')}
 Current Month: ${input.month}
 
@@ -43,7 +43,7 @@ ${pastTopics}
 
 Plan the next 6-12 months of blog content.
 Each month should build on previous posts and strengthen the overall authority.
-Consider seasonal patterns for ${input.location}.`;
+Consider seasonal patterns for ${input.locations.join(', ')}.`;
 
   return { system, user };
 }

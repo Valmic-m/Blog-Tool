@@ -24,7 +24,7 @@ Return a JSON object with:
 
   const user = `Business: ${input.businessName}
 Industry: ${input.industry}
-Location: ${input.location}
+Location: ${input.locations.join(', ')}
 Services: ${input.services.join(', ')}
 Target Audience: ${input.targetAudience}
 

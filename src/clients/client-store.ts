@@ -25,6 +25,25 @@ export function getClient(slug: string): ClientHistory | null {
 
   try {
     const raw = JSON.parse(readFileSync(historyPath, 'utf-8'));
+
+    // Migrate legacy single-string location fields to arrays
+    if ('location' in raw && typeof raw.location === 'string') {
+      raw.locations = [raw.location];
+      delete raw.location;
+    }
+    if ('cityRegion' in raw && typeof raw.cityRegion === 'string') {
+      raw.targetAreas = [raw.cityRegion];
+      delete raw.cityRegion;
+    }
+    if (!raw.targetAreas) {
+      raw.targetAreas = raw.locations || [];
+    }
+
+    // Migrate legacy single-string tone to array
+    if (typeof raw.tone === 'string') {
+      raw.tone = [raw.tone];
+    }
+
     const parsed = ClientHistorySchema.safeParse(raw);
     return parsed.success ? parsed.data : null;
   } catch {
@@ -45,7 +64,8 @@ export function createClientFromInput(input: ClientInput): ClientHistory {
     businessName: input.businessName,
     websiteUrl: input.websiteUrl,
     blogUrl: input.blogUrl,
-    location: input.location,
+    locations: input.locations,
+    targetAreas: input.targetAreas,
     industry: input.industry,
     services: input.services,
     targetAudience: input.targetAudience,

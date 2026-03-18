@@ -24,7 +24,7 @@ Return a JSON object with:
 - suggestedAngles: string[] (5-8 specific blog angle ideas that feel timely)`;
 
   const user = `Month: ${input.month}
-Location: ${input.location}
+Location: ${input.locations.join(', ')}
 Industry: ${input.industry}
 Services: ${input.services.join(', ')}
 Target Audience: ${input.targetAudience}

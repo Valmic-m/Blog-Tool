@@ -27,7 +27,7 @@ Topic: ${contentPlan.topic}
 Primary keyword: ${keywords.primaryKeyword}
 Secondary keywords: ${keywords.secondaryKeywords.join(', ')}
 Business: ${input.businessName}
-Location: ${input.location}
+Location: ${input.locations.join(', ')}
 Suggested slug: ${suggestedSlug}
 
 Generate the meta block for this blog post.
