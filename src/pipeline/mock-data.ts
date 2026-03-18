@@ -20,6 +20,66 @@ import {
   MonthStrategySchema,
 } from '../config/types.js';
 
+export const MOCK_EXTERNAL_CONTENT = {
+  platforms: [
+    {
+      type: 'rss' as const,
+      url: 'https://premiermedaesthetics.com/blog/feed',
+      label: 'RSS — premiermedaesthetics.com',
+      lastFetched: new Date().toISOString(),
+      itemCount: 5,
+    },
+  ],
+  items: [
+    {
+      title: 'Spring Skincare Tips for Glowing Skin',
+      url: 'https://premiermedaesthetics.com/blog/spring-skincare-tips',
+      publishedDate: '2025-03-15',
+      excerpt: 'As spring arrives in Austin, your skincare routine needs an update. Here are our top tips for maintaining healthy, glowing skin through the seasonal transition.',
+      topics: ['Skin Health', 'Seasonal Care'],
+      keywords: ['spring skincare', 'glowing skin', 'seasonal skincare routine'],
+      source: 'rss' as const,
+    },
+    {
+      title: 'Understanding Chemical Peels: A Complete Guide',
+      url: 'https://premiermedaesthetics.com/blog/understanding-chemical-peels',
+      publishedDate: '2025-02-10',
+      excerpt: 'Chemical peels are one of the most effective treatments for improving skin texture, tone, and clarity. Learn about the different types and what to expect.',
+      topics: ['Skin Rejuvenation', 'Chemical Peels'],
+      keywords: ['chemical peel', 'skin resurfacing', 'skin texture treatment'],
+      source: 'rss' as const,
+    },
+    {
+      title: 'Why SPF Is Your Best Anti-Aging Tool',
+      url: 'https://premiermedaesthetics.com/blog/spf-anti-aging',
+      publishedDate: '2025-01-20',
+      excerpt: 'Sun protection is the single most effective anti-aging strategy. We explain the science behind SPF and how to choose the right sunscreen for your skin.',
+      topics: ['Anti-Aging', 'Skin Health'],
+      keywords: ['SPF', 'sunscreen', 'anti-aging', 'sun protection'],
+      source: 'rss' as const,
+    },
+    {
+      title: 'Botox vs Dysport: Which Is Right for You?',
+      url: 'https://premiermedaesthetics.com/blog/botox-vs-dysport',
+      publishedDate: '2024-12-05',
+      excerpt: 'Both Botox and Dysport are popular neuromodulators, but they have key differences. Our experts break down how to choose between them.',
+      topics: ['Injectables', 'Botox'],
+      keywords: ['botox vs dysport', 'neuromodulators', 'wrinkle treatment'],
+      source: 'rss' as const,
+    },
+    {
+      title: 'The Benefits of Microneedling for Skin Renewal',
+      url: 'https://premiermedaesthetics.com/blog/microneedling-benefits',
+      publishedDate: '2024-11-18',
+      excerpt: 'Microneedling stimulates your skin\u2019s natural collagen production for smoother, firmer, more youthful-looking skin. Here is what you need to know.',
+      topics: ['Skin Rejuvenation', 'Microneedling'],
+      keywords: ['microneedling', 'collagen production', 'skin renewal'],
+      source: 'rss' as const,
+    },
+  ],
+  lastUpdated: new Date().toISOString(),
+};
+
 export const MOCK_SITE_SCAN = {
   existingTopics: [
     'Spring Skincare Tips for Glowing Skin',

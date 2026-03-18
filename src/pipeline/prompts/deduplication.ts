@@ -1,10 +1,11 @@
-import type { ContentPlan, ClientHistory } from '../../config/types.js';
+import type { ContentPlan, ClientHistory, ExternalContentCorpus } from '../../config/types.js';
 
 export function buildDeduplicationPrompt(
   contentPlan: ContentPlan,
-  history: ClientHistory,
+  history: ClientHistory | null,
+  externalContent?: ExternalContentCorpus | null,
 ) {
-  const pastTopics = history.generatedPosts.map((p) => ({
+  const pastTopics = (history?.generatedPosts || []).map((p) => ({
     topic: p.topic,
     title: p.title,
     primaryKeyword: p.primaryKeyword,
@@ -34,14 +35,30 @@ Return JSON with:
 - totalWordTarget: number (same as original)
 - modeAdjustments: string (note any dedup changes made)`;
 
+  // Build external content list
+  let externalSection = '';
+  if (externalContent && externalContent.items.length > 0) {
+    const externalList = externalContent.items
+      .map((item) => {
+        const parts = [`- "${item.title}"`];
+        if (item.topics && item.topics.length > 0) parts[0] += ` (Topics: ${item.topics.join(', ')})`;
+        return parts.join('');
+      })
+      .join('\n');
+    externalSection = `\nExisting content from connected platforms (Medium, Substack, blog, etc.):
+${externalList}\n`;
+  }
+
   const user = `Proposed blog post:
 Title: ${contentPlan.title}
 Topic: ${contentPlan.topic}
 
-Previously published posts:
-${pastTopics.map((p) => `- "${p.title}" (Topic: ${p.topic}, Keyword: ${p.primaryKeyword}, Cluster: ${p.cluster}, Month: ${p.month})`).join('\n')}
-
-Is this proposed post too similar to any previous post?
+Previously generated posts:
+${pastTopics.length > 0
+  ? pastTopics.map((p) => `- "${p.title}" (Topic: ${p.topic}, Keyword: ${p.primaryKeyword}, Cluster: ${p.cluster}, Month: ${p.month})`).join('\n')
+  : 'None'}
+${externalSection}
+Is this proposed post too similar to any previous or existing post?
 If yes, revise the title, topic, and sections to offer a fresh angle.
 If no, return the original content plan unchanged.`;
 

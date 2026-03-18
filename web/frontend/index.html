@@ -154,6 +154,32 @@
       font-size: 11px; font-weight: 600; text-transform: uppercase;
     }
     .badge-posts { background: rgba(108, 92, 231, 0.2); color: var(--primary); }
+    .badge-sources { background: rgba(0, 184, 148, 0.2); color: var(--success); }
+
+    .btn-outline {
+      background: transparent; border: 1px solid var(--border); color: var(--text);
+    }
+    .btn-outline:hover { background: var(--surface-hover); border-color: var(--text-dim); }
+
+    .platform-list { display: grid; gap: 8px; margin-top: 12px; }
+    .platform-item {
+      display: flex; justify-content: space-between; align-items: center;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); padding: 12px;
+    }
+    .platform-item .platform-info { flex: 1; }
+    .platform-item .platform-info h4 { font-size: 13px; font-weight: 500; }
+    .platform-item .platform-info p { font-size: 12px; color: var(--text-dim); }
+
+    .content-items-grid {
+      display: grid; gap: 6px; margin-top: 12px; max-height: 300px; overflow-y: auto;
+    }
+    .content-item-row {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: 4px; padding: 8px 12px; font-size: 13px;
+    }
+    .content-item-row .ci-title { font-weight: 500; }
+    .content-item-row .ci-meta { color: var(--text-dim); font-size: 11px; margin-top: 2px; }
   </style>
 </head>
 <body>
@@ -443,6 +469,8 @@
 
     // ── Clients Page ────────────────────────────────────────────────────
 
+    let selectedClientSlug = null;
+
     async function renderClients(main) {
       main.innerHTML = '<div class="card"><h2>Clients</h2><p style="color:var(--text-dim)">Loading...</p></div>';
 
@@ -455,29 +483,199 @@
           return;
         }
 
-        main.innerHTML = `
+        let html = `
           <div class="card">
             <h2>Clients (${clients.length})</h2>
             <div class="client-list">
               ${clients.map(c => `
-                <div class="client-item">
+                <div class="client-item" style="cursor:pointer" onclick="showClientDetail('${c.slug}')">
                   <div>
                     <h3>${c.businessName}</h3>
                     <p>${c.slug} · <span class="badge badge-posts">${c.postCount} posts</span> · Last updated: ${new Date(c.lastUpdated).toLocaleDateString()}</p>
                   </div>
-                  <button class="btn btn-danger btn-sm" onclick="deleteClientUI('${c.slug}')">Delete</button>
+                  <button class="btn btn-danger btn-sm" onclick="event.stopPropagation(); deleteClientUI('${c.slug}')">Delete</button>
                 </div>
               `).join('')}
             </div>
           </div>
         `;
+
+        // If a client is selected, show detail panel
+        if (selectedClientSlug) {
+          html += '<div id="client-detail"><div class="card"><p style="color:var(--text-dim)">Loading content sources...</p></div></div>';
+        }
+
+        main.innerHTML = html;
+
+        if (selectedClientSlug) {
+          renderClientDetail(selectedClientSlug);
+        }
       } catch (err) {
         main.innerHTML = '<div class="card"><p style="color:var(--danger)">Failed to load clients.</p></div>';
       }
     }
 
+    function showClientDetail(slug) {
+      selectedClientSlug = selectedClientSlug === slug ? null : slug;
+      renderClients(document.getElementById('main'));
+    }
+
+    async function renderClientDetail(slug) {
+      const detailEl = document.getElementById('client-detail');
+      if (!detailEl) return;
+
+      try {
+        const [clientRes, platformRes] = await Promise.all([
+          fetch(`/api/clients/${slug}`),
+          fetch(`/api/platforms/${slug}`),
+        ]);
+        const { client } = await clientRes.json();
+        const platformData = await platformRes.json();
+
+        const platforms = platformData.platforms || [];
+        const items = platformData.items || [];
+
+        detailEl.innerHTML = `
+          <div class="card">
+            <h2>${client.businessName} — Content Sources</h2>
+            <p style="color:var(--text-dim);font-size:13px;margin-bottom:16px">
+              Connect content platforms (Medium, Substack, blog RSS, etc.) so the generator can see all existing content and avoid duplication.
+            </p>
+
+            <h3>Connected Platforms</h3>
+            ${platforms.length > 0 ? `
+              <div class="platform-list">
+                ${platforms.map((p, i) => `
+                  <div class="platform-item">
+                    <div class="platform-info">
+                      <h4>${p.label || p.type.toUpperCase()}</h4>
+                      <p>${p.url} · ${p.itemCount || 0} items${p.lastFetched ? ` · Last fetched: ${new Date(p.lastFetched).toLocaleDateString()}` : ''}</p>
+                    </div>
+                    <button class="btn btn-danger btn-sm" onclick="removePlatform('${slug}', ${i})">Remove</button>
+                  </div>
+                `).join('')}
+              </div>
+            ` : '<p style="color:var(--text-dim);font-size:13px;margin-top:8px">No platforms connected yet.</p>'}
+
+            <div style="margin-top:16px;display:flex;gap:8px;align-items:flex-end">
+              <div class="form-group" style="flex:1;margin-bottom:0">
+                <label>Platform URL (RSS feed, blog URL, or sitemap)</label>
+                <input id="platform-url-input" placeholder="https://medium.com/@username/feed or https://example.com/blog" />
+              </div>
+              <div class="form-group" style="width:140px;margin-bottom:0">
+                <label>Type</label>
+                <select id="platform-type-select">
+                  <option value="rss">RSS Feed</option>
+                  <option value="sitemap">Sitemap</option>
+                  <option value="crawl">Blog Crawl</option>
+                </select>
+              </div>
+              <button class="btn btn-outline btn-sm" onclick="testPlatform('${slug}')" id="test-platform-btn" style="white-space:nowrap">Test</button>
+              <button class="btn btn-primary btn-sm" onclick="addPlatform('${slug}')" style="white-space:nowrap">Add</button>
+            </div>
+            <div id="platform-test-result" style="margin-top:8px;font-size:13px"></div>
+
+            <div style="margin-top:16px;display:flex;justify-content:space-between;align-items:center">
+              <h3>Discovered Content (${items.length} items)</h3>
+              <button class="btn btn-outline btn-sm" onclick="refreshContent('${slug}')" id="refresh-content-btn">Refresh All</button>
+            </div>
+            ${items.length > 0 ? `
+              <div class="content-items-grid">
+                ${items.slice(0, 50).map(item => `
+                  <div class="content-item-row">
+                    <div class="ci-title">${item.title}</div>
+                    <div class="ci-meta">
+                      ${item.source} · ${item.publishedDate ? new Date(item.publishedDate).toLocaleDateString() : 'No date'}
+                      ${item.topics && item.topics.length > 0 ? ` · ${item.topics.join(', ')}` : ''}
+                    </div>
+                  </div>
+                `).join('')}
+                ${items.length > 50 ? `<p style="color:var(--text-dim);font-size:12px;padding:8px">...and ${items.length - 50} more items</p>` : ''}
+              </div>
+            ` : `<p style="color:var(--text-dim);font-size:13px;margin-top:8px">No content discovered yet. Add a platform or click "Refresh All" to auto-discover.</p>`}
+          </div>
+        `;
+      } catch (err) {
+        detailEl.innerHTML = '<div class="card"><p style="color:var(--danger)">Failed to load client details.</p></div>';
+      }
+    }
+
+    async function testPlatform(slug) {
+      const url = document.getElementById('platform-url-input').value.trim();
+      const type = document.getElementById('platform-type-select').value;
+      const resultEl = document.getElementById('platform-test-result');
+      const btn = document.getElementById('test-platform-btn');
+
+      if (!url) { resultEl.innerHTML = '<span style="color:var(--danger)">Enter a URL first</span>'; return; }
+
+      btn.disabled = true;
+      btn.textContent = 'Testing...';
+      resultEl.innerHTML = '<span style="color:var(--text-dim)">Testing connection...</span>';
+
+      try {
+        const res = await fetch(`/api/platforms/${slug}/test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, type }),
+        });
+        const data = await res.json();
+
+        if (data.success) {
+          resultEl.innerHTML = `<span style="color:var(--success)">Found ${data.itemCount} items (${data.type})</span>`;
+        } else {
+          resultEl.innerHTML = `<span style="color:var(--danger)">${data.message}</span>`;
+        }
+      } catch (err) {
+        resultEl.innerHTML = `<span style="color:var(--danger)">Test failed: ${err.message}</span>`;
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Test';
+    }
+
+    async function addPlatform(slug) {
+      const url = document.getElementById('platform-url-input').value.trim();
+      const type = document.getElementById('platform-type-select').value;
+
+      if (!url) { alert('Enter a platform URL'); return; }
+
+      try {
+        await fetch(`/api/platforms/${slug}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type, url, label: `${type.toUpperCase()} — ${new URL(url).hostname}` }),
+        });
+        renderClientDetail(slug);
+      } catch (err) {
+        alert('Failed to add platform: ' + err.message);
+      }
+    }
+
+    async function removePlatform(slug, index) {
+      if (!confirm('Remove this platform?')) return;
+      await fetch(`/api/platforms/${slug}/${index}`, { method: 'DELETE' });
+      renderClientDetail(slug);
+    }
+
+    async function refreshContent(slug) {
+      const btn = document.getElementById('refresh-content-btn');
+      btn.disabled = true;
+      btn.textContent = 'Refreshing...';
+
+      try {
+        await fetch(`/api/platforms/${slug}/refresh`, { method: 'POST' });
+        renderClientDetail(slug);
+      } catch (err) {
+        alert('Refresh failed: ' + err.message);
+      }
+
+      btn.disabled = false;
+      btn.textContent = 'Refresh All';
+    }
+
     async function deleteClientUI(slug) {
       if (!confirm(`Delete client "${slug}" and all their data?`)) return;
+      if (selectedClientSlug === slug) selectedClientSlug = null;
       await fetch(`/api/clients/${slug}`, { method: 'DELETE' });
       renderClients(document.getElementById('main'));
     }

@@ -44,6 +44,11 @@ export function getClient(slug: string): ClientHistory | null {
       raw.tone = [raw.tone];
     }
 
+    // Default externalContent to null if missing (pre-content-sources migration)
+    if (!('externalContent' in raw)) {
+      raw.externalContent = null;
+    }
+
     const parsed = ClientHistorySchema.safeParse(raw);
     return parsed.success ? parsed.data : null;
   } catch {
@@ -74,6 +79,7 @@ export function createClientFromInput(input: ClientInput): ClientHistory {
     generatedPosts: [],
     authorityMap: null,
     clusterProgress: null,
+    externalContent: null,
     lastUpdated: new Date().toISOString(),
   };
 }
