@@ -18,7 +18,11 @@ import {
   listClients,
   deleteClient,
 } from './clients/client-store.js';
-import type { GeneratedPostRecord } from './config/types.js';
+import type { GeneratedPostRecord, PublishingConnectorConfig } from './config/types.js';
+import { publishToConnectors, buildPublishPayload } from './connectors/publisher.js';
+import { getConnector } from './connectors/registry.js';
+import { input as inquirerInput, select } from '@inquirer/prompts';
+import { randomUUID } from 'crypto';
 
 const program = new Command();
 
@@ -37,6 +41,7 @@ program
   .option('--mode <mode>', 'Generation mode (standard|authority|longform|conversion|local-domination|cluster-builder)')
   .option('--no-scan', 'Skip website scanning')
   .option('--dry-run', 'Run pipeline without writing files')
+  .option('--no-publish', 'Skip publishing to connected platforms')
   .action(async (options) => {
     try {
       // Ensure API key
@@ -140,6 +145,35 @@ program
       }
 
       console.log(chalk.green('  ✓ Client history updated.'));
+
+      // Publish to connected platforms
+      const connectors = clientHistory.publishingConnectors || [];
+      if (connectors.length > 0 && options.publish !== false) {
+        console.log('');
+        console.log(chalk.dim('  ─── Publishing ──────────────────────────────'));
+        const payload = buildPublishPayload(result, formatted);
+        const publishResults = await publishToConnectors(connectors, payload, (r) => {
+          if (r.status === 'success') {
+            console.log(chalk.green(`  ✓ ${r.label}: Draft created${r.url ? ` → ${r.url}` : ''}`));
+          } else if (r.status === 'skipped') {
+            console.log(chalk.dim(`  ○ ${r.label}: ${r.errorMessage}`));
+          } else {
+            console.log(chalk.red(`  ✗ ${r.label}: ${r.errorMessage}`));
+          }
+        });
+
+        // Update post record with publish results
+        const updatedHistory = getClient(slug);
+        if (updatedHistory) {
+          const lastPost = updatedHistory.generatedPosts[updatedHistory.generatedPosts.length - 1];
+          if (lastPost) {
+            lastPost.publishResults = publishResults;
+            updatedHistory.lastUpdated = new Date().toISOString();
+            saveClient(updatedHistory);
+          }
+        }
+      }
+
       console.log('');
     } catch (error) {
       console.error(chalk.red(`\n  Error: ${(error as Error).message}\n`));
@@ -202,6 +236,171 @@ clientsCmd
       console.log(chalk.green(`\n  ✓ Client "${slug}" deleted.\n`));
     } else {
       console.log(chalk.red(`\n  Client "${slug}" not found.\n`));
+    }
+  });
+
+// ── Connectors command ────────────────────────────────────────────────────
+
+const connectorsCmd = program.command('connectors').description('Manage publishing connectors');
+
+connectorsCmd
+  .command('list <slug>')
+  .description('List publishing connectors for a client')
+  .action((slug) => {
+    const client = getClient(slug);
+    if (!client) {
+      console.log(chalk.red(`\n  Client "${slug}" not found.\n`));
+      return;
+    }
+    const connectors = client.publishingConnectors || [];
+    if (connectors.length === 0) {
+      console.log(chalk.dim(`\n  No publishing connectors for "${client.businessName}".\n`));
+      return;
+    }
+    console.log(chalk.bold(`\n  Publishing connectors for ${client.businessName}:\n`));
+    for (const c of connectors) {
+      const status = c.enabled ? chalk.green('enabled') : chalk.dim('disabled');
+      console.log(`  ${chalk.bold(c.label)} ${chalk.dim(`(${c.platform})`)} — ${status}`);
+      console.log(`    ID: ${c.id}`);
+      if (c.lastPublishedAt) {
+        console.log(`    Last published: ${new Date(c.lastPublishedAt).toLocaleDateString()}`);
+      }
+    }
+    console.log('');
+  });
+
+connectorsCmd
+  .command('add <slug>')
+  .description('Add a publishing connector to a client')
+  .action(async (slug) => {
+    const client = getClient(slug);
+    if (!client) {
+      console.log(chalk.red(`\n  Client "${slug}" not found.\n`));
+      return;
+    }
+
+    console.log(chalk.bold(`\n  Add publishing connector for ${client.businessName}\n`));
+
+    const platform = await select({
+      message: 'Platform:',
+      choices: [
+        { name: 'Medium', value: 'medium' },
+        { name: 'WordPress', value: 'wordpress' },
+        { name: 'Webhook (Zapier/Make/n8n)', value: 'webhook' },
+      ],
+    });
+
+    const label = await inquirerInput({
+      message: 'Label (e.g., "Main Blog", "Medium Account"):',
+    });
+
+    const config: Record<string, string> = {};
+
+    if (platform === 'medium') {
+      config.integrationToken = await inquirerInput({
+        message: 'Medium Integration Token:',
+      });
+    } else if (platform === 'wordpress') {
+      config.siteUrl = await inquirerInput({
+        message: 'WordPress Site URL (e.g., https://example.com):',
+      });
+      config.username = await inquirerInput({
+        message: 'WordPress Username:',
+      });
+      config.applicationPassword = await inquirerInput({
+        message: 'WordPress Application Password:',
+      });
+    } else if (platform === 'webhook') {
+      config.webhookUrl = await inquirerInput({
+        message: 'Webhook URL:',
+      });
+      const customHeaders = await inquirerInput({
+        message: 'Custom headers (JSON, or leave blank):',
+        default: '',
+      });
+      if (customHeaders) config.headers = customHeaders;
+    }
+
+    const connector: PublishingConnectorConfig = {
+      id: randomUUID(),
+      platform: platform as 'medium' | 'wordpress' | 'webhook',
+      label,
+      enabled: true,
+      config,
+      createdAt: new Date().toISOString(),
+    };
+
+    // Test connection
+    console.log(chalk.dim('\n  Testing connection...'));
+    const connectorImpl = getConnector(platform);
+    if (connectorImpl) {
+      const testResult = await connectorImpl.testConnection(connector);
+      if (testResult.ok) {
+        console.log(chalk.green('  ✓ Connection successful!'));
+      } else {
+        console.log(chalk.yellow(`  ⚠ Connection test failed: ${testResult.error}`));
+        console.log(chalk.dim('  Connector will still be saved. You can test again later.'));
+      }
+    }
+
+    if (!client.publishingConnectors) client.publishingConnectors = [];
+    client.publishingConnectors.push(connector);
+    client.lastUpdated = new Date().toISOString();
+    saveClient(client);
+
+    console.log(chalk.green(`\n  ✓ Connector "${label}" added.\n`));
+  });
+
+connectorsCmd
+  .command('remove <slug> <connectorId>')
+  .description('Remove a publishing connector')
+  .action((slug, connectorId) => {
+    const client = getClient(slug);
+    if (!client) {
+      console.log(chalk.red(`\n  Client "${slug}" not found.\n`));
+      return;
+    }
+
+    const idx = (client.publishingConnectors || []).findIndex(c => c.id === connectorId);
+    if (idx === -1) {
+      console.log(chalk.red(`\n  Connector "${connectorId}" not found.\n`));
+      return;
+    }
+
+    const removed = client.publishingConnectors!.splice(idx, 1)[0];
+    client.lastUpdated = new Date().toISOString();
+    saveClient(client);
+    console.log(chalk.green(`\n  ✓ Connector "${removed.label}" removed.\n`));
+  });
+
+connectorsCmd
+  .command('test <slug> <connectorId>')
+  .description('Test a publishing connector')
+  .action(async (slug, connectorId) => {
+    const client = getClient(slug);
+    if (!client) {
+      console.log(chalk.red(`\n  Client "${slug}" not found.\n`));
+      return;
+    }
+
+    const connector = (client.publishingConnectors || []).find(c => c.id === connectorId);
+    if (!connector) {
+      console.log(chalk.red(`\n  Connector "${connectorId}" not found.\n`));
+      return;
+    }
+
+    console.log(chalk.dim(`\n  Testing "${connector.label}" (${connector.platform})...`));
+    const impl = getConnector(connector.platform);
+    if (!impl) {
+      console.log(chalk.red(`  Unknown platform: ${connector.platform}\n`));
+      return;
+    }
+
+    const result = await impl.testConnection(connector);
+    if (result.ok) {
+      console.log(chalk.green('  ✓ Connection successful!\n'));
+    } else {
+      console.log(chalk.red(`  ✗ Connection failed: ${result.error}\n`));
     }
   });
 

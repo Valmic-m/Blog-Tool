@@ -225,6 +225,33 @@ export const ExternalContentCorpusSchema = z.object({
 });
 export type ExternalContentCorpus = z.infer<typeof ExternalContentCorpusSchema>;
 
+// ── Publishing Connectors ─────────────────────────────────────────────────────
+
+export const PublishingPlatformEnum = z.enum(['medium', 'wordpress', 'webhook']);
+export type PublishingPlatform = z.infer<typeof PublishingPlatformEnum>;
+
+export const PublishingConnectorConfigSchema = z.object({
+  id: z.string(),
+  platform: PublishingPlatformEnum,
+  label: z.string(),
+  enabled: z.boolean().default(true),
+  config: z.record(z.string(), z.string()),
+  createdAt: z.string(),
+  lastPublishedAt: z.string().optional(),
+});
+export type PublishingConnectorConfig = z.infer<typeof PublishingConnectorConfigSchema>;
+
+export const PublishResultSchema = z.object({
+  connectorId: z.string(),
+  platform: PublishingPlatformEnum,
+  label: z.string(),
+  status: z.enum(['success', 'skipped', 'error']),
+  url: z.string().optional(),
+  errorMessage: z.string().optional(),
+  publishedAt: z.string().optional(),
+});
+export type PublishResult = z.infer<typeof PublishResultSchema>;
+
 // ── Client History ─────────────────────────────────────────────────────────────
 
 export const GeneratedPostRecordSchema = z.object({
@@ -239,6 +266,7 @@ export const GeneratedPostRecordSchema = z.object({
   wordCount: z.number(),
   slug: z.string(),
   filePath: z.string(),
+  publishResults: z.array(PublishResultSchema).optional(),
 });
 export type GeneratedPostRecord = z.infer<typeof GeneratedPostRecordSchema>;
 
@@ -271,6 +299,7 @@ export const ClientHistorySchema = z.object({
   authorityMap: AuthorityMapSchema.nullable(),
   clusterProgress: ClusterProgressSchema.nullable(),
   externalContent: ExternalContentCorpusSchema.nullable().optional(),
+  publishingConnectors: z.array(PublishingConnectorConfigSchema).optional().default([]),
   lastUpdated: z.string(),
 });
 export type ClientHistory = z.infer<typeof ClientHistorySchema>;
