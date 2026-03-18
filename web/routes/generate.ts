@@ -11,6 +11,7 @@ import {
   addPost,
 } from '../../src/clients/client-store.js';
 import { ClientInputSchema, type GeneratedPostRecord } from '../../src/config/types.js';
+import { publishToConnectors, buildPublishPayload } from '../../src/connectors/publisher.js';
 
 export function createGenerateRoutes(apiKey: string): Router {
   const router = Router();
@@ -93,6 +94,29 @@ export function createGenerateRoutes(apiKey: string): Router {
         files: { markdownPath, metaPath },
         monthStrategy: result.monthStrategy,
       });
+
+      // Publish to connected platforms
+      const connectors = clientHistory.publishingConnectors || [];
+      const enabledConnectors = connectors.filter(c => c.enabled);
+      if (enabledConnectors.length > 0) {
+        sendEvent('publish-start', { count: enabledConnectors.length });
+        const payload = buildPublishPayload(result, formatted);
+        const publishResults = await publishToConnectors(connectors, payload, (r) => {
+          sendEvent('publish-result', r);
+        });
+        sendEvent('publish-complete', { results: publishResults });
+
+        // Update post record with publish results
+        const updatedHistory = getClient(slug);
+        if (updatedHistory) {
+          const lastPost = updatedHistory.generatedPosts[updatedHistory.generatedPosts.length - 1];
+          if (lastPost) {
+            lastPost.publishResults = publishResults;
+            updatedHistory.lastUpdated = new Date().toISOString();
+            saveClient(updatedHistory);
+          }
+        }
+      }
     } catch (error) {
       sendEvent('error', { message: (error as Error).message });
     }

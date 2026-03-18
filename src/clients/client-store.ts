@@ -49,6 +49,11 @@ export function getClient(slug: string): ClientHistory | null {
       raw.externalContent = null;
     }
 
+    // Default publishingConnectors to [] if missing (pre-connectors migration)
+    if (!('publishingConnectors' in raw)) {
+      raw.publishingConnectors = [];
+    }
+
     const parsed = ClientHistorySchema.safeParse(raw);
     return parsed.success ? parsed.data : null;
   } catch {
@@ -80,6 +85,7 @@ export function createClientFromInput(input: ClientInput): ClientHistory {
     authorityMap: null,
     clusterProgress: null,
     externalContent: null,
+    publishingConnectors: [],
     lastUpdated: new Date().toISOString(),
   };
 }
