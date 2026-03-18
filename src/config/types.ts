@@ -12,6 +12,26 @@ export const ModeEnum = z.enum([
 ]);
 export type Mode = z.infer<typeof ModeEnum>;
 
+// ── Client Template (saved defaults for repeat generation) ────────────────────
+
+export const ClientTemplateSchema = z.object({
+  businessName: z.string().min(1),
+  websiteUrl: z.string().url(),
+  blogUrl: z.string().url(),
+  locations: z.array(z.string()).min(1),
+  industry: z.string().min(1),
+  services: z.array(z.string()).min(1),
+  targetAudience: z.string().min(1),
+  tone: z.array(z.string()).min(1).max(2),
+  spellingStyle: z.enum(['American', 'British', 'Canadian', 'Australian']),
+  targetAreas: z.array(z.string()).min(1),
+  competitors: z.array(z.string()),
+  defaultMode: ModeEnum.optional(),
+  specialInstructions: z.string().optional(),
+  lastUpdated: z.string(),
+});
+export type ClientTemplate = z.infer<typeof ClientTemplateSchema>;
+
 // ── Client Input ───────────────────────────────────────────────────────────────
 
 export const ClientInputSchema = z.object({

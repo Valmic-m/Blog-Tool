@@ -4,7 +4,7 @@ import 'dotenv/config';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { ensureApiKey } from './setup.js';
-import { collectInput } from './interactive.js';
+import { collectInput, editTemplate, displayTemplate } from './interactive.js';
 import { ClaudeClient } from './pipeline/claude-client.js';
 import { runPipeline, createCLIProgress } from './pipeline/orchestrator.js';
 import { formatOutput } from './output/formatter.js';
@@ -17,6 +17,10 @@ import {
   addPost,
   listClients,
   deleteClient,
+  getTemplate,
+  saveTemplate,
+  deleteTemplate,
+  templateFromInput,
 } from './clients/client-store.js';
 import type { GeneratedPostRecord, PublishingConnectorConfig } from './config/types.js';
 import { publishToConnectors, buildPublishPayload } from './connectors/publisher.js';
@@ -55,8 +59,9 @@ program
 
       // Collect input — from flags or interactive wizard
       let clientHistory = options.client ? getClient(makeSlug(options.client)) : null;
+      const existingTemplate = options.client ? getTemplate(makeSlug(options.client)) : null;
 
-      const input = await collectInput(clientHistory);
+      const input = await collectInput(clientHistory, existingTemplate);
 
       // Apply CLI overrides
       if (options.month) input.month = options.month;
@@ -144,6 +149,10 @@ program
         console.log('');
       }
 
+      // Auto-save template for next time
+      const tmpl = templateFromInput(input);
+      saveTemplate(slug, tmpl);
+
       console.log(chalk.green('  ✓ Client history updated.'));
 
       // Publish to connected platforms
@@ -211,11 +220,13 @@ clientsCmd
       console.log(chalk.red(`\n  Client "${slug}" not found.\n`));
       return;
     }
+    const tmpl = getTemplate(slug);
     console.log(chalk.bold(`\n  ${client.businessName}`));
     console.log(`  ${chalk.dim(client.websiteUrl)}`);
     console.log(`  ${client.locations.join(', ')} | ${client.industry}`);
     console.log(`  Services: ${client.services.join(', ')}`);
     console.log(`  Posts: ${client.generatedPosts.length}`);
+    console.log(`  Template: ${tmpl ? chalk.green('saved') : chalk.dim('none')}`);
     console.log('');
 
     if (client.generatedPosts.length > 0) {
@@ -236,6 +247,105 @@ clientsCmd
       console.log(chalk.green(`\n  ✓ Client "${slug}" deleted.\n`));
     } else {
       console.log(chalk.red(`\n  Client "${slug}" not found.\n`));
+    }
+  });
+
+// ── Template subcommands ──────────────────────────────────────────────────
+
+const templateCmd = clientsCmd.command('template').description('Manage client templates');
+
+templateCmd
+  .command('show <slug>')
+  .description('Show the saved template for a client')
+  .action((slug) => {
+    const tmpl = getTemplate(slug);
+    if (!tmpl) {
+      console.log(chalk.dim(`\n  No template saved for "${slug}". Generate a post first, or use 'clients template create'.\n`));
+      return;
+    }
+    displayTemplate(tmpl);
+  });
+
+templateCmd
+  .command('edit <slug>')
+  .description('Interactively edit a client template')
+  .action(async (slug) => {
+    const client = getClient(slug);
+    if (!client) {
+      console.log(chalk.red(`\n  Client "${slug}" not found.\n`));
+      return;
+    }
+
+    let tmpl = getTemplate(slug);
+    if (!tmpl) {
+      // Bootstrap template from client history
+      tmpl = {
+        businessName: client.businessName,
+        websiteUrl: client.websiteUrl,
+        blogUrl: client.blogUrl,
+        locations: client.locations,
+        industry: client.industry,
+        services: client.services,
+        targetAudience: client.targetAudience,
+        tone: client.tone,
+        spellingStyle: client.spellingStyle as 'American' | 'British' | 'Canadian' | 'Australian',
+        targetAreas: client.targetAreas,
+        competitors: [],
+        lastUpdated: new Date().toISOString(),
+      };
+      console.log(chalk.dim('\n  No template found — creating one from client history.'));
+    }
+
+    const updated = await editTemplate(tmpl);
+    saveTemplate(slug, updated);
+    console.log(chalk.green('\n  ✓ Template saved.\n'));
+  });
+
+templateCmd
+  .command('create <slug>')
+  .description('Create a template for an existing client')
+  .action(async (slug) => {
+    const client = getClient(slug);
+    if (!client) {
+      console.log(chalk.red(`\n  Client "${slug}" not found.\n`));
+      return;
+    }
+
+    const existing = getTemplate(slug);
+    if (existing) {
+      console.log(chalk.yellow(`\n  Template already exists for "${slug}". Use 'clients template edit ${slug}' to modify it.\n`));
+      return;
+    }
+
+    // Bootstrap from client history
+    const tmpl = {
+      businessName: client.businessName,
+      websiteUrl: client.websiteUrl,
+      blogUrl: client.blogUrl,
+      locations: client.locations,
+      industry: client.industry,
+      services: client.services,
+      targetAudience: client.targetAudience,
+      tone: client.tone,
+      spellingStyle: client.spellingStyle as 'American' | 'British' | 'Canadian' | 'Australian',
+      targetAreas: client.targetAreas,
+      competitors: [],
+      lastUpdated: new Date().toISOString(),
+    };
+
+    const updated = await editTemplate(tmpl);
+    saveTemplate(slug, updated);
+    console.log(chalk.green('\n  ✓ Template created.\n'));
+  });
+
+templateCmd
+  .command('delete <slug>')
+  .description('Delete a client template')
+  .action((slug) => {
+    if (deleteTemplate(slug)) {
+      console.log(chalk.green(`\n  ✓ Template for "${slug}" deleted.\n`));
+    } else {
+      console.log(chalk.dim(`\n  No template found for "${slug}".\n`));
     }
   });
 
