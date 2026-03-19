@@ -848,6 +848,7 @@
               <div style="display:flex;gap:8px">
                 ${tmpl ? `
                   <button class="btn btn-primary btn-sm" onclick="useTemplateForGenerate('${slug}')">Use for Generate</button>
+                  <button class="btn btn-outline btn-sm" onclick="editClientTemplate('${slug}')">Edit Template</button>
                   <button class="btn btn-danger btn-sm" onclick="deleteClientTemplate('${slug}')">Delete Template</button>
                 ` : `
                   <button class="btn btn-primary btn-sm" onclick="createTemplateFromClient('${slug}')">Create Template</button>
@@ -855,21 +856,24 @@
               </div>
             </div>
             ${tmpl ? `
-              <div class="meta-grid">
-                <div class="meta-item"><label>Business</label><p>${tmpl.businessName}</p></div>
-                <div class="meta-item"><label>Website</label><p>${tmpl.websiteUrl}</p></div>
-                <div class="meta-item"><label>Blog URL</label><p>${tmpl.blogUrl}</p></div>
-                <div class="meta-item"><label>Industry</label><p>${tmpl.industry}</p></div>
-                <div class="meta-item"><label>Locations</label><p>${tmpl.locations.join(', ')}</p></div>
-                <div class="meta-item"><label>Services</label><p>${tmpl.services.join(', ')}</p></div>
-                <div class="meta-item"><label>Audience</label><p>${tmpl.targetAudience}</p></div>
-                <div class="meta-item"><label>Tone</label><p>${tmpl.tone.join(', ')}</p></div>
-                <div class="meta-item"><label>Spelling</label><p>${tmpl.spellingStyle}</p></div>
-                <div class="meta-item"><label>Target Areas</label><p>${tmpl.targetAreas.join(', ')}</p></div>
-                ${tmpl.competitors?.length ? `<div class="meta-item"><label>Competitors</label><p>${tmpl.competitors.join(', ')}</p></div>` : ''}
-                ${tmpl.defaultMode ? `<div class="meta-item"><label>Default Mode</label><p>${tmpl.defaultMode}</p></div>` : ''}
-                ${tmpl.specialInstructions ? `<div class="meta-item" style="grid-column:span 2"><label>Special Instructions</label><p>${tmpl.specialInstructions}</p></div>` : ''}
+              <div id="template-display-${slug}">
+                <div class="meta-grid">
+                  <div class="meta-item"><label>Business</label><p>${tmpl.businessName}</p></div>
+                  <div class="meta-item"><label>Website</label><p>${tmpl.websiteUrl}</p></div>
+                  <div class="meta-item"><label>Blog URL</label><p>${tmpl.blogUrl}</p></div>
+                  <div class="meta-item"><label>Industry</label><p>${tmpl.industry}</p></div>
+                  <div class="meta-item"><label>Locations</label><p>${tmpl.locations.join(', ')}</p></div>
+                  <div class="meta-item"><label>Services</label><p>${tmpl.services.join(', ')}</p></div>
+                  <div class="meta-item"><label>Audience</label><p>${tmpl.targetAudience}</p></div>
+                  <div class="meta-item"><label>Tone</label><p>${tmpl.tone.join(', ')}</p></div>
+                  <div class="meta-item"><label>Spelling</label><p>${tmpl.spellingStyle}</p></div>
+                  <div class="meta-item"><label>Target Areas</label><p>${tmpl.targetAreas.join(', ')}</p></div>
+                  ${tmpl.competitors?.length ? `<div class="meta-item"><label>Competitors</label><p>${tmpl.competitors.join(', ')}</p></div>` : ''}
+                  ${tmpl.defaultMode ? `<div class="meta-item"><label>Default Mode</label><p>${tmpl.defaultMode}</p></div>` : ''}
+                  ${tmpl.specialInstructions ? `<div class="meta-item" style="grid-column:span 2"><label>Special Instructions</label><p>${tmpl.specialInstructions}</p></div>` : ''}
+                </div>
               </div>
+              <div id="template-edit-${slug}" style="display:none"></div>
             ` : '<p style="color:var(--text-dim);font-size:13px">No template saved yet. Generate a post or click "Create Template" to save defaults for this client.</p>'}
           </div>
 
@@ -1134,6 +1138,177 @@
       if (!confirm('Delete the saved template for this client?')) return;
       await fetch(`/api/templates/${slug}`, { method: 'DELETE' });
       renderClientDetail(slug);
+    }
+
+    async function editClientTemplate(slug) {
+      try {
+        const res = await fetch(`/api/templates/${slug}`);
+        if (!res.ok) throw new Error('No template');
+        const { template: t } = await res.json();
+
+        const displayEl = document.getElementById(`template-display-${slug}`);
+        const editEl = document.getElementById(`template-edit-${slug}`);
+        if (!displayEl || !editEl) return;
+
+        displayEl.style.display = 'none';
+        editEl.style.display = 'block';
+        editEl.innerHTML = `
+          <form onsubmit="saveClientTemplate(event, '${slug}')">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Business Name *</label>
+                <input name="businessName" required value="${esc(t.businessName)}" />
+              </div>
+              <div class="form-group">
+                <label>Industry *</label>
+                <input name="industry" required value="${esc(t.industry)}" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Website URL *</label>
+                <input name="websiteUrl" required type="url" value="${esc(t.websiteUrl)}" />
+              </div>
+              <div class="form-group">
+                <label>Blog URL *</label>
+                <input name="blogUrl" required type="url" value="${esc(t.blogUrl)}" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Locations * (comma-separated)</label>
+                <input name="locations" required value="${esc(t.locations.join(', '))}" />
+              </div>
+              <div class="form-group">
+                <label>Services * (comma-separated)</label>
+                <input name="services" required value="${esc(t.services.join(', '))}" />
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Target Audience *</label>
+                <input name="targetAudience" required value="${esc(t.targetAudience)}" />
+              </div>
+              <div class="form-group">
+                <label>Target Areas * (comma-separated)</label>
+                <input name="targetAreas" required value="${esc(t.targetAreas.join(', '))}" />
+              </div>
+            </div>
+            <div class="form-row-3">
+              <div class="form-group">
+                <label>Tone (select up to 2)</label>
+                <div class="checkbox-group">
+                  ${['Professional','Friendly','Clinical','Casual','Authoritative','Warm & Approachable'].map(tone =>
+                    `<label class="checkbox-label"><input type="checkbox" name="tone" value="${tone}" ${t.tone.includes(tone) ? 'checked' : ''} /> ${tone}</label>`
+                  ).join('')}
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Spelling Style</label>
+                <select name="spellingStyle">
+                  ${['American','British','Canadian','Australian'].map(s =>
+                    `<option ${t.spellingStyle === s ? 'selected' : ''}>${s}</option>`
+                  ).join('')}
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Default Mode</label>
+                <select name="defaultMode">
+                  <option value="">None</option>
+                  ${[
+                    ['standard', 'Standard'],
+                    ['authority', 'Authority'],
+                    ['longform', 'Longform'],
+                    ['conversion', 'Conversion'],
+                    ['local-domination', 'Local Domination'],
+                    ['cluster-builder', 'Cluster Builder'],
+                  ].map(([val, label]) =>
+                    `<option value="${val}" ${(t.defaultMode || '') === val ? 'selected' : ''}>${label}</option>`
+                  ).join('')}
+                </select>
+              </div>
+            </div>
+            <div class="form-row">
+              <div class="form-group">
+                <label>Competitors (comma-separated, optional)</label>
+                <input name="competitors" value="${t.competitors?.length ? esc(t.competitors.join(', ')) : ''}" />
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Special Instructions (optional)</label>
+              <textarea name="specialInstructions">${t.specialInstructions || ''}</textarea>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:8px">
+              <button type="submit" class="btn btn-primary btn-sm">Save Changes</button>
+              <button type="button" class="btn btn-outline btn-sm" onclick="cancelEditTemplate('${slug}')">Cancel</button>
+            </div>
+            <div id="template-edit-result-${slug}" style="margin-top:8px;font-size:13px"></div>
+          </form>
+        `;
+      } catch (err) {
+        alert('Failed to load template for editing: ' + err.message);
+      }
+    }
+
+    function cancelEditTemplate(slug) {
+      const displayEl = document.getElementById(`template-display-${slug}`);
+      const editEl = document.getElementById(`template-edit-${slug}`);
+      if (displayEl) displayEl.style.display = 'block';
+      if (editEl) { editEl.style.display = 'none'; editEl.innerHTML = ''; }
+    }
+
+    async function saveClientTemplate(event, slug) {
+      event.preventDefault();
+      const form = event.target;
+      const resultEl = document.getElementById(`template-edit-result-${slug}`);
+
+      const toneChecked = Array.from(form.querySelectorAll('input[name="tone"]:checked')).map(cb => cb.value);
+      if (toneChecked.length === 0) {
+        resultEl.innerHTML = '<span style="color:var(--danger)">Select at least 1 tone</span>';
+        return;
+      }
+      if (toneChecked.length > 2) {
+        resultEl.innerHTML = '<span style="color:var(--danger)">Select at most 2 tones</span>';
+        return;
+      }
+
+      const splitTrim = v => v.split(',').map(s => s.trim()).filter(Boolean);
+
+      const body = {
+        businessName: form.businessName.value.trim(),
+        websiteUrl: form.websiteUrl.value.trim(),
+        blogUrl: form.blogUrl.value.trim(),
+        locations: splitTrim(form.locations.value),
+        industry: form.industry.value.trim(),
+        services: splitTrim(form.services.value),
+        targetAudience: form.targetAudience.value.trim(),
+        tone: toneChecked,
+        spellingStyle: form.spellingStyle.value,
+        targetAreas: splitTrim(form.targetAreas.value),
+        competitors: splitTrim(form.competitors.value),
+      };
+
+      const defaultMode = form.defaultMode.value;
+      if (defaultMode) body.defaultMode = defaultMode;
+
+      const specialInstructions = form.specialInstructions.value.trim();
+      if (specialInstructions) body.specialInstructions = specialInstructions;
+
+      try {
+        const res = await fetch(`/api/templates/${slug}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(body),
+        });
+        if (!res.ok) {
+          const data = await res.json();
+          resultEl.innerHTML = `<span style="color:var(--danger)">${data.error || 'Failed to save'}</span>`;
+          return;
+        }
+        renderClientDetail(slug);
+      } catch (err) {
+        resultEl.innerHTML = `<span style="color:var(--danger)">Save failed: ${err.message}</span>`;
+      }
     }
 
     async function createTemplateFromClient(slug) {
