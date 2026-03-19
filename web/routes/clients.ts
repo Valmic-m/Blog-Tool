@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import {
   listClients,
+  listClientsDetailed,
   getClient,
   saveClient,
   createClientFromInput,
@@ -15,6 +16,12 @@ export function createClientRoutes(): Router {
   // List all clients
   router.get('/', (_req, res) => {
     const clients = listClients();
+    res.json({ clients });
+  });
+
+  // List all clients with template and connector details
+  router.get('/detailed', (_req, res) => {
+    const clients = listClientsDetailed();
     res.json({ clients });
   });
 

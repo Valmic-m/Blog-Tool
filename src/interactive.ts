@@ -3,6 +3,7 @@ import chalk from 'chalk';
 import type { ClientInput, ClientTemplate, Mode } from './config/types.js';
 import { TONE_OPTIONS, SPELLING_OPTIONS } from './config/defaults.js';
 import type { ClientHistory } from './config/types.js';
+import { listClientsDetailed, bootstrapTemplateFromHistory, saveTemplate } from './clients/client-store.js';
 
 function displayTemplate(template: ClientTemplate): void {
   console.log(chalk.bold('\n  Saved client template:\n'));
@@ -401,6 +402,81 @@ export async function editTemplate(template: ClientTemplate): Promise<ClientTemp
   }
 
   return updated;
+}
+
+/**
+ * Client selection prompt: pick an existing client or create a new one.
+ * Returns immediately with { action: 'new' } if no clients exist.
+ */
+export async function selectClient(): Promise<
+  | { action: 'existing'; slug: string; hasTemplate: boolean }
+  | { action: 'new' }
+> {
+  const clients = listClientsDetailed();
+
+  if (clients.length === 0) {
+    console.log(chalk.dim('  No existing clients found — starting new client wizard.\n'));
+    return { action: 'new' };
+  }
+
+  const topAction = await select({
+    message: 'What would you like to do?',
+    choices: [
+      { name: 'Select an existing client', value: 'existing' as const },
+      { name: 'Create a new client', value: 'new' as const },
+    ],
+  });
+
+  if (topAction === 'new') {
+    return { action: 'new' };
+  }
+
+  const chosen = await select({
+    message: 'Select a client:',
+    choices: clients.map((c) => {
+      const posts = `${c.postCount} post${c.postCount !== 1 ? 's' : ''}`;
+      const connectors = c.connectorPlatforms.length > 0
+        ? c.connectorPlatforms.join(', ')
+        : 'no connectors';
+      return {
+        name: `${c.businessName} (${posts}) — ${connectors}`,
+        value: { slug: c.slug, hasTemplate: c.hasTemplate },
+      };
+    }),
+  });
+
+  return { action: 'existing', slug: chosen.slug, hasTemplate: chosen.hasTemplate };
+}
+
+/**
+ * Collect input for an existing client.
+ * Fast path if template exists; offers bootstrap or full wizard otherwise.
+ */
+export async function collectForExistingClient(
+  clientHistory: ClientHistory,
+  template: ClientTemplate | null,
+): Promise<ClientInput> {
+  if (template) {
+    return collectFromTemplate(template);
+  }
+
+  // No template — offer to bootstrap one from history
+  const action = await select({
+    message: 'No saved template for this client. What would you like to do?',
+    choices: [
+      { name: 'Create template from client history (recommended)', value: 'bootstrap' as const },
+      { name: 'Run full wizard', value: 'full' as const },
+    ],
+  });
+
+  if (action === 'bootstrap') {
+    const bootstrapped = bootstrapTemplateFromHistory(clientHistory);
+    saveTemplate(clientHistory.clientSlug, bootstrapped);
+    console.log(chalk.green('  ✓ Template created from client history.\n'));
+    return collectFromTemplate(bootstrapped);
+  }
+
+  return collectFull(clientHistory);
 }
 
 export { displayTemplate };
