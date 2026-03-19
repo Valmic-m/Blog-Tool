@@ -241,9 +241,15 @@
     let generationResult = null;
     let loadedTemplate = null;
     let clientsList = null;
+    let selectedGenerateClient = null;  // { slug, businessName, hasTemplate, connectorPlatforms }
+    let generateStep = 'select';        // 'select' | 'form'
 
     function showPage(page) {
       currentPage = page;
+      if (page === 'generate') {
+        // Refresh client list when navigating to generate
+        clientsList = null;
+      }
       document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
       document.querySelector(`nav button[onclick="showPage('${page}')"]`).classList.add('active');
       render();
@@ -257,85 +263,222 @@
       const main = document.getElementById('main');
       switch (currentPage) {
         case 'generate':
-          main.innerHTML = renderGenerate();
-          const toneGroup = document.getElementById('toneGroup');
-          if (toneGroup) {
-            toneGroup.addEventListener('change', (e) => {
-              const checked = toneGroup.querySelectorAll('input[name="tone"]:checked');
-              if (checked.length > 2) {
-                e.target.checked = false;
-              }
-            });
+          // Fetch client list if needed for selection step
+          if (!clientsList) {
+            try {
+              const res = await fetch('/api/clients/detailed');
+              const data = await res.json();
+              clientsList = data.clients || [];
+            } catch { clientsList = []; }
           }
-          // Populate client dropdown
-          try {
-            const res = await fetch('/api/templates/');
-            const data = await res.json();
-            clientsList = data.clients || [];
-            const sel = document.getElementById('template-client-select');
-            if (sel) {
-              sel.innerHTML = '<option value="">Select a client...</option>' +
-                clientsList.map(c =>
-                  `<option value="${c.slug}" ${c.hasTemplate ? '' : 'disabled'}>${c.businessName}${c.hasTemplate ? '' : ' (no template)'}</option>`
-                ).join('');
+
+          if (generateStep === 'select') {
+            main.innerHTML = renderClientSelection();
+          } else {
+            main.innerHTML = renderGenerateForm();
+            const toneGroup = document.getElementById('toneGroup');
+            if (toneGroup) {
+              toneGroup.addEventListener('change', (e) => {
+                const checked = toneGroup.querySelectorAll('input[name="tone"]:checked');
+                if (checked.length > 2) {
+                  e.target.checked = false;
+                }
+              });
             }
-          } catch {}
+          }
           break;
         case 'clients': renderClients(main); break;
       }
     }
 
-    async function loadClientTemplate() {
-      const sel = document.getElementById('template-client-select');
-      const resultEl = document.getElementById('template-load-result');
-      const slug = sel.value;
-      if (!slug) { resultEl.innerHTML = '<span style="color:var(--danger)">Select a client first</span>'; return; }
-
-      resultEl.innerHTML = '<span style="color:var(--text-dim)">Loading template...</span>';
-      try {
-        const res = await fetch(`/api/templates/${slug}`);
-        if (!res.ok) throw new Error('No template found');
-        const { template } = await res.json();
-        loadedTemplate = template;
-        render();
-      } catch (err) {
-        resultEl.innerHTML = `<span style="color:var(--danger)">${err.message}</span>`;
-      }
+    function goBackToClientSelect() {
+      selectedGenerateClient = null;
+      loadedTemplate = null;
+      generateStep = 'select';
+      clientsList = null;  // Re-fetch fresh data
+      render();
     }
 
-    function clearTemplate() {
+    async function pickGenerateClient(slug) {
+      const c = clientsList.find(x => x.slug === slug);
+      if (!c) return;
+      selectedGenerateClient = c;
+      generateStep = 'form';
+
+      // Load template if available
+      if (c.hasTemplate) {
+        try {
+          const res = await fetch(`/api/templates/${slug}`);
+          if (res.ok) {
+            const { template } = await res.json();
+            loadedTemplate = template;
+          }
+        } catch {}
+      } else {
+        loadedTemplate = null;
+      }
+      render();
+    }
+
+    function pickNewClient() {
+      selectedGenerateClient = null;
       loadedTemplate = null;
+      generateStep = 'form';
       render();
     }
 
     // ── Generate Page ───────────────────────────────────────────────────
 
-    function renderGenerate() {
+    function renderClientSelection() {
+      const clients = clientsList || [];
+      return `
+        <div class="card">
+          <h2>Select a Client</h2>
+          <p style="color:var(--text-dim);font-size:13px;margin-bottom:16px">Choose an existing client to quick-generate, or create a new one.</p>
+          <div class="client-list">
+            ${clients.map(c => {
+              const posts = c.postCount + ' post' + (c.postCount !== 1 ? 's' : '');
+              const connectors = c.connectorPlatforms.length > 0
+                ? c.connectorPlatforms.join(', ')
+                : 'no connectors';
+              const templateBadge = c.hasTemplate
+                ? '<span style="color:var(--success);font-size:12px;margin-left:8px">template saved</span>'
+                : '<span style="color:var(--text-dim);font-size:12px;margin-left:8px">no template</span>';
+              return `
+                <div class="client-item" style="cursor:pointer" onclick="pickGenerateClient('${c.slug}')">
+                  <div>
+                    <h3>${esc(c.businessName)}${templateBadge}</h3>
+                    <p>${posts} &middot; ${connectors}</p>
+                  </div>
+                </div>`;
+            }).join('')}
+            <div class="client-item" style="cursor:pointer;border-style:dashed" onclick="pickNewClient()">
+              <div>
+                <h3 style="color:var(--primary)">+ Create New Client</h3>
+                <p>Start from scratch with the full setup wizard</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderGenerateForm() {
       const now = new Date();
       const currentMonth = now.toLocaleString('en-US', { month: 'long', year: 'numeric' });
       const t = loadedTemplate;
+      const isQuick = t !== null && selectedGenerateClient !== null;
+      const clientName = selectedGenerateClient?.businessName || '';
 
-      return `
-        <div class="card" style="margin-bottom:16px">
-          <div style="display:flex;justify-content:space-between;align-items:center">
-            <h2>Load Client Template</h2>
-            ${t ? `<button class="btn btn-outline btn-sm" onclick="clearTemplate()">Clear</button>` : ''}
-          </div>
-          <p style="color:var(--text-dim);font-size:13px;margin-bottom:12px">
-            ${t ? `Loaded template for <strong>${t.businessName}</strong>. Edit any fields below before generating.` : 'Select a client to auto-fill the form from their saved template.'}
-          </p>
-          <div style="display:flex;gap:8px;align-items:flex-end">
-            <div class="form-group" style="flex:1;margin-bottom:0">
-              <select id="template-client-select">
-                <option value="">Select a client...</option>
-              </select>
+      let headerHtml = '';
+      if (selectedGenerateClient) {
+        const connectors = selectedGenerateClient.connectorPlatforms?.length > 0
+          ? selectedGenerateClient.connectorPlatforms.join(', ')
+          : 'no connectors';
+        headerHtml = `
+          <div class="card" style="margin-bottom:16px">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <h2>${esc(clientName)}</h2>
+                <p style="color:var(--text-dim);font-size:13px">${connectors}</p>
+              </div>
+              <button class="btn btn-outline btn-sm" onclick="goBackToClientSelect()">Change Client</button>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="loadClientTemplate()" style="white-space:nowrap">Load Template</button>
+            ${isQuick ? `
+              <div class="meta-grid" style="margin-top:16px">
+                <div class="meta-item"><label>Website</label><p>${esc(t.websiteUrl)}</p></div>
+                <div class="meta-item"><label>Blog URL</label><p>${esc(t.blogUrl)}</p></div>
+                <div class="meta-item"><label>Industry</label><p>${esc(t.industry)}</p></div>
+                <div class="meta-item"><label>Locations</label><p>${esc(t.locations.join(', '))}</p></div>
+                <div class="meta-item"><label>Services</label><p>${esc(t.services.join(', '))}</p></div>
+                <div class="meta-item"><label>Audience</label><p>${esc(t.targetAudience)}</p></div>
+                <div class="meta-item"><label>Tone</label><p>${esc(t.tone.join(', '))}</p></div>
+                <div class="meta-item"><label>Spelling</label><p>${esc(t.spellingStyle)}</p></div>
+                <div class="meta-item"><label>Target Areas</label><p>${esc(t.targetAreas.join(', '))}</p></div>
+                ${t.competitors?.length ? `<div class="meta-item"><label>Competitors</label><p>${esc(t.competitors.join(', '))}</p></div>` : ''}
+              </div>
+            ` : ''}
+          </div>`;
+      } else {
+        headerHtml = `
+          <div style="margin-bottom:16px">
+            <button class="btn btn-outline btn-sm" onclick="goBackToClientSelect()">Back to client selection</button>
+          </div>`;
+      }
+
+      // Quick form: only per-run fields
+      if (isQuick) {
+        return `
+          ${headerHtml}
+          <div class="card">
+            <h2>Generate Blog Post</h2>
+            <form onsubmit="startGeneration(event)">
+              <input type="hidden" name="businessName" value="${esc(t.businessName)}" />
+              <input type="hidden" name="websiteUrl" value="${esc(t.websiteUrl)}" />
+              <input type="hidden" name="blogUrl" value="${esc(t.blogUrl)}" />
+              <input type="hidden" name="locations" value="${esc(t.locations.join(', '))}" />
+              <input type="hidden" name="industry" value="${esc(t.industry)}" />
+              <input type="hidden" name="services" value="${esc(t.services.join(', '))}" />
+              <input type="hidden" name="targetAudience" value="${esc(t.targetAudience)}" />
+              <input type="hidden" name="targetAreas" value="${esc(t.targetAreas.join(', '))}" />
+              <input type="hidden" name="competitors" value="${t.competitors?.length ? esc(t.competitors.join(', ')) : ''}" />
+              <input type="hidden" name="spellingStyle" value="${esc(t.spellingStyle)}" />
+              ${t.tone.map(tone => `<input type="hidden" name="tone" value="${esc(tone)}" />`).join('')}
+              <div class="form-row-3">
+                <div class="form-group">
+                  <label>Target Month</label>
+                  <input name="month" value="${currentMonth}" />
+                </div>
+                <div class="form-group">
+                  <label>Mode</label>
+                  <select name="mode">
+                    ${[
+                      ['standard', 'Standard (1000-1400 words)'],
+                      ['authority', 'Authority (1500-2000 words)'],
+                      ['longform', 'Longform (2000-3000 words)'],
+                      ['conversion', 'Conversion (1000-1400 words)'],
+                      ['local-domination', 'Local Domination (1200-1600 words)'],
+                      ['cluster-builder', 'Cluster Builder (1000-1400 words)'],
+                    ].map(([val, label]) =>
+                      `<option value="${val}" ${(t?.defaultMode || 'standard') === val ? 'selected' : ''}>${label}</option>`
+                    ).join('')}
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label>&nbsp;</label>
+                  <button type="submit" class="btn btn-primary" id="generateBtn" style="width:100%">Generate Blog Post</button>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Special Instructions (optional)</label>
+                <textarea name="specialInstructions" placeholder="Any specific focus areas, topics to avoid, etc.">${t?.specialInstructions || ''}</textarea>
+              </div>
+            </form>
           </div>
-          <div id="template-load-result" style="margin-top:8px;font-size:13px"></div>
-        </div>
+          <div id="progress-container" style="display:none">
+            <div class="card">
+              <h2>Generation Progress</h2>
+              <ul class="progress-list" id="progress-list"></ul>
+            </div>
+          </div>
+          <div id="result-container" style="display:none">
+            <div class="card">
+              <h2>Generated Blog Post</h2>
+              <div class="meta-grid" id="result-meta"></div>
+              <div style="margin-top: 16px">
+                <button class="btn btn-primary btn-sm" onclick="copyMarkdown()">Copy Markdown</button>
+              </div>
+              <div class="markdown-preview" id="result-markdown" style="margin-top: 16px"></div>
+            </div>
+          </div>
+        `;
+      }
+
+      // Full form: new client or existing without template
+      return `
+        ${headerHtml}
         <div class="card">
-          <h2>Generate Blog Post</h2>
+          <h2>${selectedGenerateClient ? 'Generate Blog Post' : 'New Client — Generate Blog Post'}</h2>
           <form onsubmit="startGeneration(event)">
             <div class="form-row">
               <div class="form-group">
@@ -456,7 +599,10 @@
       const form = e.target;
       const btn = document.getElementById('generateBtn');
 
-      const selectedTones = Array.from(form.querySelectorAll('input[name="tone"]:checked')).map(el => el.value);
+      // Collect tones from either checkboxes (full form) or hidden inputs (quick form)
+      const checkedTones = Array.from(form.querySelectorAll('input[name="tone"]:checked')).map(el => el.value);
+      const hiddenTones = Array.from(form.querySelectorAll('input[name="tone"][type="hidden"]')).map(el => el.value);
+      const selectedTones = checkedTones.length > 0 ? checkedTones : hiddenTones;
       if (selectedTones.length === 0 || selectedTones.length > 2) {
         alert('Please select 1 or 2 tones.');
         return;
@@ -967,7 +1113,18 @@
         if (!res.ok) throw new Error('No template');
         const { template } = await res.json();
         loadedTemplate = template;
-        showPage('generate');
+
+        // Fetch detailed client list for the generate flow
+        const detailedRes = await fetch('/api/clients/detailed');
+        const detailedData = await detailedRes.json();
+        clientsList = detailedData.clients || [];
+
+        selectedGenerateClient = clientsList.find(c => c.slug === slug) || null;
+        generateStep = 'form';
+        currentPage = 'generate';
+        document.querySelectorAll('nav button').forEach(b => b.classList.remove('active'));
+        document.querySelector("nav button[onclick=\"showPage('generate')\"]").classList.add('active');
+        render();
       } catch (err) {
         alert('Failed to load template: ' + err.message);
       }

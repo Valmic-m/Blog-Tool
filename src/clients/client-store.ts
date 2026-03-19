@@ -166,6 +166,64 @@ export function templateFromInput(input: ClientInput): ClientTemplate {
   };
 }
 
+const PLATFORM_LABELS: Record<string, string> = {
+  medium: 'Medium',
+  wordpress: 'WordPress',
+  webhook: 'Webhook',
+};
+
+export function listClientsDetailed(): {
+  slug: string;
+  businessName: string;
+  postCount: number;
+  lastUpdated: string;
+  hasTemplate: boolean;
+  connectorPlatforms: string[];
+}[] {
+  ensureDir(DATA_DIR);
+  const dirs = readdirSync(DATA_DIR, { withFileTypes: true })
+    .filter((d) => d.isDirectory())
+    .map((d) => d.name);
+
+  return dirs
+    .map((slug) => {
+      const client = getClient(slug);
+      if (!client) return null;
+      const tmpl = getTemplate(slug);
+      const platforms = (client.publishingConnectors || [])
+        .filter((c) => c.enabled)
+        .map((c) => PLATFORM_LABELS[c.platform] || c.platform);
+      // Deduplicate platforms (client could have two WordPress connectors)
+      const uniquePlatforms = [...new Set(platforms)];
+      return {
+        slug,
+        businessName: client.businessName,
+        postCount: client.generatedPosts.length,
+        lastUpdated: client.lastUpdated,
+        hasTemplate: tmpl !== null,
+        connectorPlatforms: uniquePlatforms,
+      };
+    })
+    .filter((c): c is NonNullable<typeof c> => c !== null);
+}
+
+export function bootstrapTemplateFromHistory(client: ClientHistory): ClientTemplate {
+  return {
+    businessName: client.businessName,
+    websiteUrl: client.websiteUrl,
+    blogUrl: client.blogUrl,
+    locations: client.locations,
+    industry: client.industry,
+    services: client.services,
+    targetAudience: client.targetAudience,
+    tone: client.tone,
+    spellingStyle: client.spellingStyle as 'American' | 'British' | 'Canadian' | 'Australian',
+    targetAreas: client.targetAreas,
+    competitors: [],
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
 export function deleteClient(slug: string): boolean {
   const dir = getClientDir(slug);
   if (!existsSync(dir)) return false;

@@ -4,7 +4,7 @@ import 'dotenv/config';
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { ensureApiKey } from './setup.js';
-import { collectInput, editTemplate, displayTemplate } from './interactive.js';
+import { collectInput, editTemplate, displayTemplate, selectClient, collectForExistingClient } from './interactive.js';
 import { ClaudeClient } from './pipeline/claude-client.js';
 import { runPipeline, createCLIProgress } from './pipeline/orchestrator.js';
 import { formatOutput } from './output/formatter.js';
@@ -21,6 +21,7 @@ import {
   saveTemplate,
   deleteTemplate,
   templateFromInput,
+  bootstrapTemplateFromHistory,
 } from './clients/client-store.js';
 import type { GeneratedPostRecord, PublishingConnectorConfig } from './config/types.js';
 import { publishToConnectors, buildPublishPayload } from './connectors/publisher.js';
@@ -57,11 +58,32 @@ program
       console.log(chalk.dim('  ─────────────────────────────────'));
       console.log('');
 
-      // Collect input — from flags or interactive wizard
-      let clientHistory = options.client ? getClient(makeSlug(options.client)) : null;
-      const existingTemplate = options.client ? getTemplate(makeSlug(options.client)) : null;
+      // Resolve client — select existing or create new
+      let clientHistory: ReturnType<typeof getClient> = null;
+      let existingTemplate: ReturnType<typeof getTemplate> = null;
+      let input: Awaited<ReturnType<typeof collectInput>>;
 
-      const input = await collectInput(clientHistory, existingTemplate);
+      if (options.client) {
+        // --client flag: go directly to that client
+        const slug = makeSlug(options.client);
+        clientHistory = getClient(slug);
+        if (!clientHistory) {
+          console.log(chalk.red(`\n  Client "${options.client}" not found. Run without --client to create a new client.\n`));
+          process.exit(1);
+        }
+        existingTemplate = getTemplate(slug);
+        input = await collectForExistingClient(clientHistory, existingTemplate);
+      } else {
+        // Interactive client selection
+        const selection = await selectClient();
+        if (selection.action === 'existing') {
+          clientHistory = getClient(selection.slug);
+          existingTemplate = getTemplate(selection.slug);
+          input = await collectForExistingClient(clientHistory!, existingTemplate);
+        } else {
+          input = await collectInput();
+        }
+      }
 
       // Apply CLI overrides
       if (options.month) input.month = options.month;
@@ -278,21 +300,7 @@ templateCmd
 
     let tmpl = getTemplate(slug);
     if (!tmpl) {
-      // Bootstrap template from client history
-      tmpl = {
-        businessName: client.businessName,
-        websiteUrl: client.websiteUrl,
-        blogUrl: client.blogUrl,
-        locations: client.locations,
-        industry: client.industry,
-        services: client.services,
-        targetAudience: client.targetAudience,
-        tone: client.tone,
-        spellingStyle: client.spellingStyle as 'American' | 'British' | 'Canadian' | 'Australian',
-        targetAreas: client.targetAreas,
-        competitors: [],
-        lastUpdated: new Date().toISOString(),
-      };
+      tmpl = bootstrapTemplateFromHistory(client);
       console.log(chalk.dim('\n  No template found — creating one from client history.'));
     }
 
@@ -318,20 +326,7 @@ templateCmd
     }
 
     // Bootstrap from client history
-    const tmpl = {
-      businessName: client.businessName,
-      websiteUrl: client.websiteUrl,
-      blogUrl: client.blogUrl,
-      locations: client.locations,
-      industry: client.industry,
-      services: client.services,
-      targetAudience: client.targetAudience,
-      tone: client.tone,
-      spellingStyle: client.spellingStyle as 'American' | 'British' | 'Canadian' | 'Australian',
-      targetAreas: client.targetAreas,
-      competitors: [],
-      lastUpdated: new Date().toISOString(),
-    };
+    const tmpl = bootstrapTemplateFromHistory(client);
 
     const updated = await editTemplate(tmpl);
     saveTemplate(slug, updated);
